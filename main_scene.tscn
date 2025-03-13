@@ -1,0 +1,30 @@
+[gd_scene load_steps=5 format=3 uid="uid://bcu2uo540syvh"]
+
+[ext_resource type="PackedScene" uid="uid://b6k51cxbrotea" path="res://maps/basic_map.tscn" id="1_h40kg"]
+[ext_resource type="PackedScene" uid="uid://cm35lha3ywe4j" path="res://objects/hero.tscn" id="2_oqxto"]
+[ext_resource type="Script" path="res://label.gd" id="3_u5utf"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_vb3tf"]
+font_size = 30
+
+[node name="MainGameScene" type="Node"]
+
+[node name="TileMapLayer" parent="." instance=ExtResource("1_h40kg")]
+position = Vector2(64, 64)
+
+[node name="Node2D" parent="." instance=ExtResource("2_oqxto")]
+position = Vector2(608, 32)
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(631, 368)
+scale = Vector2(75.2512, -0.829945)
+zoom = Vector2(0.9, 0.9)
+
+[node name="Label" type="Label" parent="."]
+offset_left = -7.0
+offset_top = 12.0
+offset_right = 358.0
+offset_bottom = 54.0
+text = "Made steps: "
+label_settings = SubResource("LabelSettings_vb3tf")
+script = ExtResource("3_u5utf")

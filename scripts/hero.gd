@@ -5,24 +5,18 @@ const step = 64
 func _input(event):
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_UP:
-			position.y -= step
+			move(Vector2.UP)
 		elif event.keycode == KEY_DOWN:
-			position.y += step
+			move(Vector2.DOWN)
 		elif event.keycode == KEY_LEFT:
-			position.x -= step
+			move(Vector2.LEFT)
 		elif event.keycode == KEY_RIGHT:
-			position.x += step
+			move(Vector2.RIGHT)
 
+func move(vector: Vector2):
+	var collision = move_and_collide(vector * step)
+	position = snap_to_grid(position)
+	GlobalSteps.emit_signal("made_new_step")
 
-func _physics_process(delta: float) -> void:
-
-	# Get the input direction and handle the movement/deceleration.
-	# As good practice, you should replace UI actions with custom gameplay actions.
-	var x_direction := Input.get_axis("ui_left", "ui_right")
-	var y_direction := Input.get_axis("ui_up", "ui_down")
-	#if x_direction:
-		#position.x += x_direction
-	#if y_direction:
-		#position.y += y_direction
-
-	move_and_slide()
+func snap_to_grid(position: Vector2) -> Vector2:
+	return (position / step).floor() * step + Vector2(step/2, step/2)
