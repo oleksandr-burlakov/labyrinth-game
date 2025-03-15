@@ -21,6 +21,18 @@ var height = 10  # height of map (in tiles)
 # get a reference to the map for convenience
 @onready var Map = self
 
+func destroy_wall(position: Vector2i, direction: Vector2i):
+	var cell_coordinate = local_to_map(to_local(position))
+	var next_coordinate = cell_coordinate + direction
+	if get_cell_tile_data(cell_coordinate) and get_cell_tile_data(next_coordinate):
+		var current_walls = get_wall_from_cords(Map.get_cell_atlas_coords(cell_coordinate)) - cell_walls[direction]
+		Map.set_cell(cell_coordinate, 3, coordinates[current_walls])
+		var next_walls = get_wall_from_cords(Map.get_cell_atlas_coords(next_coordinate)) - cell_walls[direction * -1]
+		Map.set_cell(next_coordinate, 3, coordinates[next_walls])
+		return true
+	return false
+
+
 func _ready():
 	randomize()
 	make_maze()
@@ -64,10 +76,34 @@ func make_maze():
 			current = stack.pop_back()
 	
 	#left
-	Map.set_cell(Vector2i(0, randi_range(0,9)), 3, Vector2i(0,0))
+	var left_y = randi_range(0,9)
+	var left_walls = 0;
+	if left_y == 0:
+		left_walls |= N
+	if left_y == 9:
+		left_walls |= S
+	Map.set_cell(Vector2i(0, left_y), 3, coordinates[left_walls])
 	#top
-	Map.set_cell(Vector2i(randi_range(0,9), 0), 3, Vector2i(0,0))
+	var top_x = randi_range(0,9)
+	var top_wall = 0;
+	if top_x == 0:
+		top_wall |= W
+	if top_x == 9:
+		top_wall |= E
+	Map.set_cell(Vector2i(top_x, 0), 3, coordinates[top_wall])
 	#right
-	Map.set_cell(Vector2i(9, randi_range(0,9)), 3, Vector2i(0,0))
+	var right_y = randi_range(0,9)
+	var right_wall = 0;
+	if right_y == 0:
+		right_wall |= N
+	if right_y == 9:
+		right_wall |= S
+	Map.set_cell(Vector2i(9, right_y), 3, coordinates[right_wall])
 	#bottom
-	Map.set_cell(Vector2i(randi_range(0,9), 9), 3, Vector2i(0,0))
+	var bottom_x = randi_range(0,9)
+	var bottom_wall = 0;
+	if bottom_x == 0:
+		bottom_wall |= W
+	if bottom_x == 9:
+		bottom_wall |= E
+	Map.set_cell(Vector2i(bottom_x, 9), 3,  coordinates[bottom_wall])

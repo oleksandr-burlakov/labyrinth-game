@@ -1,0 +1,43 @@
+[gd_scene load_steps=7 format=3 uid="uid://bcu2uo540syvh"]
+
+[ext_resource type="PackedScene" uid="uid://b6k51cxbrotea" path="res://maps/basic_map.tscn" id="1_awfiu"]
+[ext_resource type="PackedScene" uid="uid://cm35lha3ywe4j" path="res://objects/hero.tscn" id="2_qauv5"]
+[ext_resource type="Script" path="res://scripts/label.gd" id="3_m7c7n"]
+[ext_resource type="Script" path="res://scripts/bombs.gd" id="4_80avp"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_vb3tf"]
+font_size = 30
+
+[sub_resource type="LabelSettings" id="LabelSettings_y455q"]
+font_size = 24
+
+[node name="MainGameView" type="Node"]
+
+[node name="TileMapLayer" parent="." instance=ExtResource("1_awfiu")]
+position = Vector2(64, 64)
+
+[node name="MainHero" parent="." instance=ExtResource("2_qauv5")]
+position = Vector2(608, 32)
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(631, 368)
+scale = Vector2(75.2512, -0.829945)
+zoom = Vector2(0.9, 0.9)
+
+[node name="Label" type="Label" parent="."]
+offset_left = -7.0
+offset_top = 12.0
+offset_right = 358.0
+offset_bottom = 54.0
+text = "Made steps: "
+label_settings = SubResource("LabelSettings_vb3tf")
+script = ExtResource("3_m7c7n")
+
+[node name="Bombs" type="Label" parent="."]
+offset_left = 1072.0
+offset_top = 24.0
+offset_right = 1165.0
+offset_bottom = 58.0
+text = "Bombs: "
+label_settings = SubResource("LabelSettings_y455q")
+script = ExtResource("4_80avp")

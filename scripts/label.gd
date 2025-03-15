@@ -3,8 +3,8 @@ extends Label
 @onready var counter: int = 0
 
 func _ready() -> void:
-	GlobalSteps.connect("made_new_step", Callable(self, "update_counter"))
+	Globals.connect("made_new_step", Callable(self, "update_counter"))
 
 func update_counter() -> void:
-	self.counter += 1
+	self.counter = Globals.STEPS
 	self.text = "Made steps: " + str(self.counter)
