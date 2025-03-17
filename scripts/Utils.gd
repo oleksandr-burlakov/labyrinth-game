@@ -12,7 +12,8 @@ var coordinates = [Vector2i(0,0),Vector2i(1,0),Vector2i(2,0),Vector2i(3,0),
 	]
 
 var cell_walls = {Vector2i(1, 0): E, Vector2i(-1, 0): W,
-				  Vector2i(0, 1): S, Vector2i(0, -1): N}
+				  Vector2i(0, 1): S, Vector2i(0, -1): N,
+				  Vector2i(0,0): 0}
 
 var tile_size = 64  # tile size (in pixels)
 var width = 10  # width of map (in tiles)

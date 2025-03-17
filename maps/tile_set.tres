@@ -1,7 +1,8 @@
-[gd_resource type="TileSet" load_steps=7 format=3 uid="uid://dni8hjctop85a"]
+[gd_resource type="TileSet" load_steps=9 format=3 uid="uid://dni8hjctop85a"]
 
 [ext_resource type="Texture2D" uid="uid://ihju2vaxhyuv" path="res://sprites/Border-1.png" id="1_hpgs2"]
 [ext_resource type="Texture2D" uid="uid://df1ycruocf4kc" path="res://sprites/tile-1.png" id="2_s5urp"]
+[ext_resource type="Texture2D" uid="uid://buskstbw8xss8" path="res://sprites/new_cells_trans.png" id="3_5qhuo"]
 [ext_resource type="Texture2D" uid="uid://byjdtuv2jcili" path="res://sprites/new_cells.png" id="3_kq7rk"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_xvbub"]
@@ -49,6 +50,26 @@ texture = ExtResource("2_s5urp")
 texture_region_size = Vector2i(64, 64)
 0:0/0 = 0
 
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_haejs"]
+texture = ExtResource("3_5qhuo")
+texture_region_size = Vector2i(64, 64)
+1:0/0 = 0
+2:0/0 = 0
+3:0/0 = 0
+0:1/0 = 0
+1:1/0 = 0
+2:1/0 = 0
+3:1/0 = 0
+0:2/0 = 0
+1:2/0 = 0
+2:2/0 = 0
+3:2/0 = 0
+0:3/0 = 0
+1:3/0 = 0
+2:3/0 = 0
+3:3/0 = 0
+0:0/0 = 0
+
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_jbbmk"]
 texture = ExtResource("3_kq7rk")
 texture_region_size = Vector2i(64, 64)
@@ -92,3 +113,4 @@ physics_layer_0/collision_layer = 1
 sources/0 = SubResource("TileSetAtlasSource_xvbub")
 sources/1 = SubResource("TileSetAtlasSource_lu7c3")
 sources/3 = SubResource("TileSetAtlasSource_jbbmk")
+sources/2 = SubResource("TileSetAtlasSource_haejs")
