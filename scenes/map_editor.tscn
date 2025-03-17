@@ -1,0 +1,73 @@
+[gd_scene load_steps=3 format=4 uid="uid://bwyuj6uxh6oob"]
+
+[ext_resource type="TileSet" uid="uid://dni8hjctop85a" path="res://maps/tile_set.tres" id="1_wjykj"]
+[ext_resource type="Script" path="res://scripts/map_editor.gd" id="1_yig1r"]
+
+[node name="MapEditor" type="Node"]
+script = ExtResource("1_yig1r")
+
+[node name="HSplitContainer" type="HSplitContainer" parent="."]
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 1243.0
+offset_bottom = 47.0
+grow_vertical = 2
+scale = Vector2(0.92, 0.92)
+
+[node name="MapPanel" type="Panel" parent="HSplitContainer"]
+custom_minimum_size = Vector2(640, 640)
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="TileMapLayer" type="TileMapLayer" parent="HSplitContainer/MapPanel"]
+tile_map_data = PackedByteArray("AAAAAAAAAwAAAAAAAAAAAAEAAwAAAAAAAAAAAAIAAwAAAAAAAAAAAAMAAwAAAAAAAAAAAAQAAwAAAAAAAAAAAAUAAwAAAAAAAAAAAAYAAwAAAAAAAAAAAAcAAwAAAAAAAAAAAAgAAwAAAAAAAAAAAAkAAwAAAAAAAAABAAAAAwAAAAAAAAABAAEAAwAAAAAAAAABAAIAAwAAAAAAAAABAAMAAwAAAAAAAAABAAQAAwAAAAAAAAABAAUAAwAAAAAAAAABAAYAAwAAAAAAAAABAAcAAwAAAAAAAAABAAgAAwAAAAAAAAABAAkAAwAAAAAAAAACAAAAAwAAAAAAAAACAAEAAwAAAAAAAAACAAIAAwAAAAAAAAACAAMAAwAAAAAAAAACAAQAAwAAAAAAAAACAAUAAwAAAAAAAAACAAYAAwAAAAAAAAACAAcAAwAAAAAAAAACAAgAAwAAAAAAAAACAAkAAwAAAAAAAAADAAAAAwAAAAAAAAADAAEAAwAAAAAAAAADAAIAAwAAAAAAAAADAAMAAwAAAAAAAAADAAQAAwAAAAAAAAADAAUAAwAAAAAAAAADAAYAAwAAAAAAAAADAAcAAwAAAAAAAAADAAgAAwAAAAAAAAADAAkAAwAAAAAAAAAEAAAAAwAAAAAAAAAEAAEAAwAAAAAAAAAEAAIAAwAAAAAAAAAEAAMAAwAAAAAAAAAEAAQAAwAAAAAAAAAEAAUAAwAAAAAAAAAEAAYAAwAAAAAAAAAEAAcAAwAAAAAAAAAEAAgAAwAAAAAAAAAEAAkAAwAAAAAAAAAFAAAAAwAAAAAAAAAFAAEAAwAAAAAAAAAFAAIAAwAAAAAAAAAFAAMAAwAAAAAAAAAFAAQAAwAAAAAAAAAFAAUAAwAAAAAAAAAFAAYAAwAAAAAAAAAFAAcAAwAAAAAAAAAFAAgAAwAAAAAAAAAFAAkAAwAAAAAAAAAGAAAAAwAAAAAAAAAGAAEAAwAAAAAAAAAGAAIAAwAAAAAAAAAGAAMAAwAAAAAAAAAGAAQAAwAAAAAAAAAGAAUAAwAAAAAAAAAGAAYAAwAAAAAAAAAGAAcAAwAAAAAAAAAGAAgAAwAAAAAAAAAGAAkAAwAAAAAAAAAHAAAAAwAAAAAAAAAHAAEAAwAAAAAAAAAHAAIAAwAAAAAAAAAHAAMAAwAAAAAAAAAHAAQAAwAAAAAAAAAHAAUAAwAAAAAAAAAHAAYAAwAAAAAAAAAHAAcAAwAAAAAAAAAHAAgAAwAAAAAAAAAHAAkAAwAAAAAAAAAIAAAAAwAAAAAAAAAIAAEAAwAAAAAAAAAIAAIAAwAAAAAAAAAIAAMAAwAAAAAAAAAIAAQAAwAAAAAAAAAIAAUAAwAAAAAAAAAIAAYAAwAAAAAAAAAIAAcAAwAAAAAAAAAIAAgAAwAAAAAAAAAIAAkAAwAAAAAAAAAJAAAAAwAAAAAAAAAJAAEAAwAAAAAAAAAJAAIAAwAAAAAAAAAJAAMAAwAAAAAAAAAJAAQAAwAAAAAAAAAJAAUAAwAAAAAAAAAJAAYAAwAAAAAAAAAJAAcAAwAAAAAAAAAJAAgAAwAAAAAAAAAJAAkAAwAAAAAAAAA=")
+tile_set = ExtResource("1_wjykj")
+
+[node name="SidePanel" type="Panel" parent="HSplitContainer"]
+layout_mode = 2
+
+[node name="WallsButton" type="Button" parent="HSplitContainer/SidePanel"]
+layout_mode = 0
+offset_left = 8.86951
+offset_top = 8.69565
+offset_right = 58.8695
+offset_bottom = 39.6957
+text = "Walls"
+flat = true
+
+[node name="ClearButton" type="Button" parent="HSplitContainer/SidePanel"]
+layout_mode = 0
+offset_left = 69.7391
+offset_top = 8.69565
+offset_right = 119.739
+offset_bottom = 39.6957
+toggle_mode = true
+text = "Clear
+"
+flat = true
+
+[node name="GenerateButton" type="Button" parent="HSplitContainer/SidePanel"]
+layout_mode = 0
+offset_left = 130.609
+offset_top = 8.69565
+offset_right = 180.609
+offset_bottom = 39.6957
+toggle_mode = true
+text = "Generate"
+flat = true
+
+[node name="Done" type="Button" parent="HSplitContainer/SidePanel"]
+layout_mode = 0
+offset_left = 495.826
+offset_top = 8.69565
+offset_right = 575.826
+offset_bottom = 39.6957
+toggle_mode = true
+text = "Done
+"
+flat = true
+
+[connection signal="pressed" from="HSplitContainer/SidePanel/ClearButton" to="." method="_on_clear_button_pressed"]
+[connection signal="pressed" from="HSplitContainer/SidePanel/GenerateButton" to="." method="_on_generate_button_pressed"]
