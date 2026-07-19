@@ -21,24 +21,64 @@ const activeGames = {};
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  socket.on("join_game", (roomId) => {
-    socket.join(roomId);
-
-    if (!activeGames[roomId]) {
-      activeGames[roomId] = { players: [], maze: {} };
+  socket.on("create_room", ({ userName, roomName }) => {
+    if (activeGames[roomName]) {
+      socket.emit("error", { msg: "Room already exists." });
+      return;
     }
 
-    activeGames[roomId].players.push(socket.id);
-    console.log(`User ${socket.id} joined room ${roomId}`);
+    activeGames[roomName] = {
+      name: roomName,
+      players: [{ id: socket.id, name: userName }],
+      status: "waiting", // waiting, in_progress, finished
+    };
 
-    if (activeGames[roomId].players.length === 2) {
-      io.to(roomId).emit("game_ready", {
-        msg: "Both players ready. Let's build the maze!",
-      });
+    socket.join(roomName);
+    socket.emit("room_created", roomName);
+    console.log(`Room created: ${roomName} by user ${socket.id}`);
+  });
+
+  socket.on("join_room", ({ userName, roomName }) => {
+    const room = activeGames[roomName];
+
+    if (!room) {
+      socket.emit("error", { msg: "Room does not exist." });
+      return;
     }
+
+    if (room.players.length >= 2) {
+      socket.emit("error", { msg: "Room is full." });
+      return;
+    }
+
+    room.players.push({ id: socket.id, name: userName });
+    room.status = "in_progress"; // Start the game when two players join
+
+    socket.join(roomName);
+    socket.emit("room_joined", { roomName });
+
+    io.to(roomName).emit("game_start", {
+      roomName: roomName,
+      players: room.players,
+    });
+
+    console.log(`User ${socket.id} joined room ${roomName}`);
   });
 
   socket.on("disconnect", () => {
+    for (const roomName in activeGames) {
+      const room = activeGames[roomName];
+      if (room.players.some((player) => player.id === socket.id)) {
+        const leftPlayer = room.players.find(
+          (player) => player.id === socket.id,
+        );
+        io.to(roomName).emit(
+          "player_left",
+          `Opponent ${leftPlayer.name} has left the game.`,
+        );
+        delete activeGames[roomName]; // Remove the room if a player leaves
+      }
+    }
     console.log(`User disconnected: ${socket.id}`);
   });
 });
