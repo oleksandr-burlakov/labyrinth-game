@@ -1,5 +1,5 @@
 import { socket, EVENTS } from "../services/socket-service.js";
-import { MazeGenerator } from "../services/maze-generator.js";
+import { MazeGenerator, generateRandomItems } from "../services/maze-generator.js";
 import { getDifficultyWallLimit } from "@labyrinth/shared";
 import { BoardViewport, isTouchPointer } from "../services/board-viewport.js";
 import { addGameSprite, gameAsset, preloadGameAssets } from "../services/game-assets.js";
@@ -58,10 +58,8 @@ export class SetupScene extends Phaser.Scene {
   }
 
   createDraft() {
-    this.maze = { cells: new MazeGenerator(10, 10).generate({ maxInternalWalls: this.wallLimit() }), entrances: [{ x: 1, y: 0, side: "north" }, { x: 8, y: 9, side: "south" }, { x: 9, y: 3, side: "east" }, { x: 0, y: 6, side: "west" }], items: [
-      { type: "treasure", x: 1, y: 1 }, { type: "treasure", x: 3, y: 3 }, { type: "treasure", x: 6, y: 6 }, { type: "treasure", x: 8, y: 8 },
-      { type: "walking_stick", x: 2, y: 7 }, { type: "crossbow", x: 7, y: 2 }, { type: "pirate_glass", x: 4, y: 5 }, { type: "bear_trap", x: 5, y: 4 },
-    ] };
+    const entrances = [{ x: 1, y: 0, side: "north" }, { x: 8, y: 9, side: "south" }, { x: 9, y: 3, side: "east" }, { x: 0, y: 6, side: "west" }];
+    this.maze = { cells: new MazeGenerator(10, 10).generate({ maxInternalWalls: this.wallLimit() }), entrances, items: generateRandomItems(entrances) };
     this.activeItem = null; this.submitted = false; this.drawDraft(); this.setStatus(`Draft ready (${this.room.difficulty ?? "normal"} difficulty). ${this.wallStatus()} Move items or edit the maze before submitting.${this.getLayout().mobile ? " Two fingers pan and zoom." : ""}`);
   }
   setStatus(message, color = "#aaa") { this.status.setText(message).setColor(color); }

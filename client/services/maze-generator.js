@@ -1,3 +1,16 @@
+import { ITEM_QUOTAS } from "@labyrinth/shared";
+
+export function generateRandomItems(entrances, { width = 10, height = 10, random = Math.random } = {}) {
+  const entranceCells = new Set((entrances ?? []).map(({ x, y }) => `${x},${y}`));
+  const cells = [];
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (!entranceCells.has(`${x},${y}`)) cells.push({ x, y });
+  const itemCount = Object.values(ITEM_QUOTAS).reduce((total, quota) => total + quota, 0);
+  if (cells.length < itemCount) throw new Error("Not enough non-entrance cells for the required items.");
+  for (let index = cells.length - 1; index > 0; index--) { const swapIndex = Math.floor(random() * (index + 1)); [cells[index], cells[swapIndex]] = [cells[swapIndex], cells[index]]; }
+  let index = 0;
+  return Object.entries(ITEM_QUOTAS).flatMap(([type, quota]) => Array.from({ length: quota }, () => ({ type, ...cells[index++] })));
+}
+
 export class MazeGenerator {
   constructor(width = 10, height = 10) {
     this.width = width;

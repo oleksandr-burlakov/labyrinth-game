@@ -10,11 +10,18 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 const activeGames = new Map();
 const turnTimers = new Map();
+const playerRoomCodes = new Map();
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 function validText(value, max = 32) { return typeof value === "string" && value.trim().length > 0 && value.trim().length <= max; }
 function error(socket, message, code = "INVALID_REQUEST", details = []) { socket.emit(EVENTS.ERROR, envelope({ code, message, details })); }
-function findRoomByPlayerId(playerId) { return [...activeGames.values()].find((room) => room.players.some((player) => player.id === playerId)); }
+function findRoomByPlayerId(playerId) {
+  const room = activeGames.get(playerRoomCodes.get(playerId));
+  if (room?.players.some((player) => player.id === playerId)) return room;
+  const fallback = [...activeGames.values()].find((candidate) => candidate.players.some((player) => player.id === playerId));
+  if (fallback) playerRoomCodes.set(playerId, fallback.code);
+  return fallback;
+}
 function generateRoomCode() {
   let code;
   do code = Array.from({ length: 6 }, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join(""); while (activeGames.has(code));
@@ -66,7 +73,7 @@ io.on("connection", (socket) => {
     if (!isDifficulty(difficulty)) return error(socket, "Difficulty must be easy, normal, or hard.");
     const code = generateRoomCode(); const player = { id: socket.id, name: userName, connected: true, submitted: false };
     const room = { code, difficulty, phase: ROOM_PHASES.WAITING, hostPlayerId: player.id, turnTimerSeconds: timer ?? null, players: [player], setups: {}, mazes: {}, turn: null, fog: {}, match: null, result: null };
-    activeGames.set(code, room); socket.join(code); emitSnapshot(room);
+    activeGames.set(code, room); playerRoomCodes.set(socket.id, code); socket.join(code); emitSnapshot(room);
   });
 
   socket.on(EVENTS.JOIN_ROOM, (payload = {}) => {
@@ -74,7 +81,7 @@ io.on("connection", (socket) => {
     if (!validText(userName) || !/^[A-Z2-9]{6}$/.test(roomCode ?? "")) return error(socket, "Nickname and a valid six-character room code are required.");
     if (!room) return error(socket, "Room does not exist.", "ROOM_NOT_FOUND");
     if (room.players.length >= 2) return error(socket, "Room is full.", "ROOM_FULL");
-    room.players.push({ id: socket.id, name: userName, connected: true, submitted: false }); room.phase = ROOM_PHASES.SETUP;
+    room.players.push({ id: socket.id, name: userName, connected: true, submitted: false }); room.phase = ROOM_PHASES.SETUP; playerRoomCodes.set(socket.id, roomCode);
     socket.join(roomCode); emitSnapshot(room);
   });
 
@@ -109,11 +116,11 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     const room = findRoomByPlayerId(socket.id);
-    if (room) { const player = room.players.find((candidate) => candidate.id === socket.id); player.connected = false; player.disconnectedAt = Date.now(); emitSnapshot(room); }
+    if (room) { const player = room.players.find((candidate) => candidate.id === socket.id); player.connected = false; player.disconnectedAt = Date.now(); emitSnapshot(room); } playerRoomCodes.delete(socket.id);
   });
 });
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
 
-export { activeGames, app, io, generateRoomCode };
+export { activeGames, app, io, generateRoomCode, playerRoomCodes };
