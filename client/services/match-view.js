@@ -2,8 +2,16 @@ export function perspectiveFor(room, localPlayerId) {
   return room?.phase === "playing" && room.turn?.activePlayerId !== localPlayerId ? "observer" : "explorer";
 }
 
-export function canSendMove(room, localPlayerId, connected, pending) {
-  return Boolean(connected && !pending && room?.phase === "playing" && room.turn?.activePlayerId === localPlayerId && room.turn.movesRemaining > 0);
+/** True only when this exact cell edge faces outside the 10×10 maze. */
+export function isOuterMazeEdge(x, y, side, width = 10, height = 10) {
+  return (side === "north" && y === 0)
+    || (side === "east" && x === width - 1)
+    || (side === "south" && y === height - 1)
+    || (side === "west" && x === 0);
+}
+
+export function canSendMove(room, localPlayerId, connected, pending, now = Date.now()) {
+  return Boolean(connected && !pending && room?.phase === "playing" && room.turn?.activePlayerId === localPlayerId && room.turn.movesRemaining > 0 && (!room.turn.availableAt || now >= room.turn.availableAt));
 }
 
 export function secondsRemaining(deadlineAt, now = Date.now()) {

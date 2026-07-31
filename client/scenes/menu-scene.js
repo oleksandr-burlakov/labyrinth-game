@@ -16,6 +16,9 @@ export class MenuScene extends Phaser.Scene {
                 <select id="timerInput" style="padding: 10px; width: 224px; font-size: 16px;">
                   <option value="">Timer disabled</option><option value="10">10 seconds</option><option value="30">30 seconds</option><option value="60">60 seconds</option><option value="90">90 seconds</option><option value="120">120 seconds</option>
                 </select><br><br>
+                <select id="difficultyInput" style="padding: 10px; width: 224px; font-size: 16px;">
+                  <option value="easy">Easy — 45 walls</option><option value="normal" selected>Normal — 65 walls</option><option value="hard">Hard — unlimited walls</option>
+                </select><br><br>
                 <button id="createBtn" style="padding: 10px 20px; font-size: 16px; margin-right: 10px; cursor: pointer;">Create Room</button>
                 <button id="joinBtn" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Join Room</button>
                 <p id="errorLog" style="color: red; margin-top: 15px; font-weight: bold;"></p>
@@ -31,11 +34,12 @@ export class MenuScene extends Phaser.Scene {
     const roomInput = domElement.getChildByID("roomInput");
     const nameInput = domElement.getChildByID("nameInput");
     const timerInput = domElement.getChildByID("timerInput");
+    const difficultyInput = domElement.getChildByID("difficultyInput");
     const errorLog = domElement.getChildByID("errorLog");
 
     createBtn.addEventListener("click", () => {
       const name = nameInput.value.trim();
-      if (name) socket.emit(EVENTS.CREATE_ROOM, { userName: name, turnTimerSeconds: timerInput.value ? Number(timerInput.value) : null });
+      if (name) socket.emit(EVENTS.CREATE_ROOM, { userName: name, turnTimerSeconds: timerInput.value ? Number(timerInput.value) : null, difficulty: difficultyInput.value });
     });
 
     joinBtn.addEventListener("click", () => {

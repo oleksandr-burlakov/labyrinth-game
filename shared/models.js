@@ -4,13 +4,13 @@ import { ROOM_PHASES } from "./constants.js";
 /** @typedef {{ type: string, x: number, y: number }} ItemPlacement */
 /** @typedef {{ width: number, height: number, cells: number[][], entrances: Coordinate[], items: ItemPlacement[] }} Maze */
 /** @typedef {{ id: string, name: string, connected: boolean }} Player */
-/** @typedef {{ activePlayerId: string, turnNumber: number, deadlineAt: number|null }} TurnState */
+/** @typedef {{ activePlayerId: string, turnNumber: number, movesRemaining: number, availableAt: number, deadlineAt: number|null }} TurnState */
 /** @typedef {{ discoveredCells: Coordinate[], revealedEdges: Array<Coordinate & {side: string, blocked: boolean}> }} FogState */
 /** @typedef {{ winnerId: string|null, reason: string }} MatchResult */
-/** @typedef {{ name: string, phase: string, players: Player[], mazes: Record<string, Maze>, turn: TurnState|null, fog: Record<string, FogState>, result: MatchResult|null }} Room */
+/** @typedef {{ name: string, difficulty: "easy"|"normal"|"hard", phase: string, players: Player[], mazes: Record<string, Maze>, turn: TurnState|null, fog: Record<string, FogState>, result: MatchResult|null }} Room */
 
-export function createRoom(name, player) {
-  return { code: name, phase: ROOM_PHASES.WAITING, hostPlayerId: player.id, turnTimerSeconds: null, players: [player], setups: {}, mazes: {}, turn: null, fog: {}, match: null, result: null };
+export function createRoom(name, player, difficulty = "normal") {
+  return { code: name, difficulty, phase: ROOM_PHASES.WAITING, hostPlayerId: player.id, turnTimerSeconds: null, players: [player], setups: {}, mazes: {}, turn: null, fog: {}, match: null, result: null };
 }
 
 /** Return only the state that is safe for one recipient to receive. */

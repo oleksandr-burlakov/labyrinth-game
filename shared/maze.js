@@ -15,6 +15,18 @@ export function areWallsSymmetric(maze, width = MAZE_WIDTH, height = MAZE_HEIGHT
   return true;
 }
 
+/** Count internal maze walls once each (east and south edges only). */
+export function countInternalWalls(maze, width = MAZE_WIDTH, height = MAZE_HEIGHT) {
+  let count = 0;
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const cell = maze[y]?.[x];
+    if (!Number.isInteger(cell)) continue;
+    if (x + 1 < width && cell & WALLS.EAST) count++;
+    if (y + 1 < height && cell & WALLS.SOUTH) count++;
+  }
+  return count;
+}
+
 export function reachableCells(maze, start = { x: 0, y: 0 }) {
   const seen = new Set(); const queue = [start];
   while (queue.length) {

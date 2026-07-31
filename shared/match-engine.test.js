@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ITEM_TYPES, ROOM_PHASES, WALLS, applyMove, chooseStart, expireTurn, initializeMatch, projectRoom } from "./index.js";
+import { ITEM_TYPES, ROOM_PHASES, TURN_TRANSITION_MS, WALLS, applyMove, chooseStart, expireTurn, initializeMatch, projectRoom } from "./index.js";
 
 function maze(items = []) {
   const cells = Array.from({ length: 10 }, (_, y) => Array.from({ length: 10 }, (_, x) =>
@@ -36,10 +36,34 @@ describe("match engine", () => {
     let state = started([{ type: ITEM_TYPES.CROSSBOW, x: 2, y: 1 }, { type: ITEM_TYPES.BEAR_TRAP, x: 3, y: 1 }]);
     state = applyMove(state, "a", "right", { now: 101 }).room;
     expect(state.match.playerStates.b.movementBonus).toBe(1);
-    state = applyMove(state, "b", "right", { now: 102 }).room;
-    state = applyMove(state, "b", "right", { now: 103 }).room;
-    state = applyMove(state, "a", "right", { now: 104 }).room;
+    state = applyMove(state, "b", "right", { now: 101 + TURN_TRANSITION_MS }).room;
+    state = applyMove(state, "b", "right", { now: 102 + TURN_TRANSITION_MS }).room;
+    state = applyMove(state, "a", "right", { now: 102 + TURN_TRANSITION_MS * 2 }).room;
     expect(state.match.playerStates.a.skipTurns).toBe(3);
+  });
+
+  it("continues play after both players are caught in bear traps", () => {
+    let state = started([{ type: ITEM_TYPES.BEAR_TRAP, x: 2, y: 1 }]);
+    state.mazes.a.items = [{ type: ITEM_TYPES.BEAR_TRAP, x: 2, y: 1 }];
+    state = applyMove(state, "a", "right", { now: 101 }).room;
+    state = applyMove(state, "b", "right", { now: 101 + TURN_TRANSITION_MS }).room;
+
+    expect(state.match.playerStates.a.skipTurns).toBe(0);
+    expect(state.match.playerStates.b.skipTurns).toBe(0);
+    expect(state.turn.activePlayerId).toBe("a");
+    expect(state.turn.availableAt).toBe(101 + TURN_TRANSITION_MS * 2);
+    expect(applyMove(state, "a", "up", { now: state.turn.availableAt }).ok).toBe(true);
+  });
+
+  it("delays a new turn without shortening its configured timer", () => {
+    const state = started();
+    const result = applyMove(state, "a", "right", { now: 101 });
+    expect(result.room.turn.availableAt).toBe(101 + TURN_TRANSITION_MS);
+    expect(applyMove(result.room, "b", "right", { now: 102 }).code).toBe("TURN_NOT_READY");
+    expect(applyMove(result.room, "b", "right", { now: 101 + TURN_TRANSITION_MS }).ok).toBe(true);
+    const timed = { ...state, turnTimerSeconds: 10 };
+    const timedResult = applyMove(timed, "a", "right", { now: 200 });
+    expect(timedResult.room.turn.deadlineAt).toBe(200 + TURN_TRANSITION_MS + 10_000);
   });
 
   it("extracts a carried treasure through an entrance and ends at four", () => {
@@ -51,7 +75,7 @@ describe("match engine", () => {
     expect(result.room.match.playerStates.a.position).toEqual({ x: 1, y: 0 });
   });
 
-  it("reveals only the pirate glass forward cell and advances an expired turn", () => {
+  it("reveals the pirate glass forward cell only through an open edge and advances an expired turn", () => {
     let state = started([{ type: ITEM_TYPES.PIRATE_GLASS, x: 1, y: 1 }]);
     state = applyMove(state, "a", "right", { now: 101 }).room;
     expect(state.fog.a.discoveredCells).toContainEqual({ x: 3, y: 1 });
@@ -59,6 +83,15 @@ describe("match engine", () => {
     state.turnTimerSeconds = 10; state.turn = { activePlayerId: "a", turnNumber: 4, movesRemaining: 1, deadlineAt: 200 };
     const expired = expireTurn(state, { now: 200 });
     expect(expired.room.turn.activePlayerId).toBe("b");
+  });
+
+  it("does not reveal a pirate-glass cell or item behind a wall", () => {
+    const state = started([{ type: ITEM_TYPES.PIRATE_GLASS, x: 1, y: 1 }, { type: ITEM_TYPES.TREASURE, x: 3, y: 1 }]);
+    state.mazes.b.cells[1][2] |= WALLS.EAST; state.mazes.b.cells[1][3] |= WALLS.WEST;
+    const result = applyMove(state, "a", "right", { now: 101 });
+    expect(result.room.fog.a.discoveredCells).not.toContainEqual({ x: 3, y: 1 });
+    expect(result.room.fog.a.revealedEdges).toContainEqual({ x: 2, y: 1, side: "east", blocked: true });
+    expect(projectRoom(result.room, "a").match.visibleItems).not.toContainEqual({ type: ITEM_TYPES.TREASURE, x: 3, y: 1 });
   });
 
   it("projects the authored maze for observation but not the target maze", () => {

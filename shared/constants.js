@@ -1,6 +1,16 @@
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 4;
 export const MAZE_WIDTH = 10;
 export const MAZE_HEIGHT = 10;
+export const TURN_TRANSITION_MS = 1000;
+export const DIFFICULTIES = Object.freeze({ EASY: "easy", NORMAL: "normal", HARD: "hard" });
+export const DEFAULT_DIFFICULTY = DIFFICULTIES.NORMAL;
+export const DIFFICULTY_WALL_LIMITS = Object.freeze({
+  [DIFFICULTIES.EASY]: 45,
+  [DIFFICULTIES.NORMAL]: 65,
+  [DIFFICULTIES.HARD]: null,
+});
+export function isDifficulty(value) { return Object.values(DIFFICULTIES).includes(value); }
+export function getDifficultyWallLimit(difficulty = DEFAULT_DIFFICULTY) { return DIFFICULTY_WALL_LIMITS[difficulty] ?? null; }
 export const WALLS = Object.freeze({ NORTH: 1, EAST: 2, SOUTH: 4, WEST: 8 });
 export const ITEM_TYPES = Object.freeze({
   TREASURE: "treasure",

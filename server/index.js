@@ -2,7 +2,7 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
-import { EVENTS, ROOM_PHASES, applyMove, chooseStart, envelope, expireTurn, initializeMatch, projectRoom, validateSetupSubmission } from "@labyrinth/shared";
+import { DEFAULT_DIFFICULTY, EVENTS, isDifficulty, ROOM_PHASES, applyMove, chooseStart, envelope, expireTurn, initializeMatch, projectRoom, validateSetupSubmission } from "@labyrinth/shared";
 
 const app = express();
 app.use(cors());
@@ -59,11 +59,12 @@ function applyResult(socket, room, result) {
 
 io.on("connection", (socket) => {
   socket.on(EVENTS.CREATE_ROOM, (payload = {}) => {
-    const userName = payload.userName?.trim(); const timer = payload.turnTimerSeconds;
+    const userName = payload.userName?.trim(); const timer = payload.turnTimerSeconds; const difficulty = payload.difficulty ?? DEFAULT_DIFFICULTY;
     if (!validText(userName)) return error(socket, "Nickname is required.");
     if (!(timer === null || timer === undefined || (Number.isInteger(timer) && timer >= 10 && timer <= 120))) return error(socket, "Timer must be disabled or between 10 and 120 seconds.");
+    if (!isDifficulty(difficulty)) return error(socket, "Difficulty must be easy, normal, or hard.");
     const code = generateRoomCode(); const player = { id: socket.id, name: userName, connected: true, submitted: false };
-    const room = { code, phase: ROOM_PHASES.WAITING, hostPlayerId: player.id, turnTimerSeconds: timer ?? null, players: [player], setups: {}, mazes: {}, turn: null, fog: {}, match: null, result: null };
+    const room = { code, difficulty, phase: ROOM_PHASES.WAITING, hostPlayerId: player.id, turnTimerSeconds: timer ?? null, players: [player], setups: {}, mazes: {}, turn: null, fog: {}, match: null, result: null };
     activeGames.set(code, room); socket.join(code); emitSnapshot(room);
   });
 
@@ -81,7 +82,7 @@ io.on("connection", (socket) => {
     if (!room || room.phase !== ROOM_PHASES.SETUP) return error(socket, "Maze setup is not currently open.", "SETUP_CLOSED");
     const player = room.players.find((candidate) => candidate.id === socket.id); const { maze } = payload;
     if (!maze || !Array.isArray(maze.cells) || !Array.isArray(maze.entrances) || !Array.isArray(maze.items)) return error(socket, "Setup submission must include maze cells, entrances, and items.", "INVALID_SETUP_PAYLOAD");
-    const result = validateSetupSubmission(maze.cells, maze.entrances, maze.items);
+    const result = validateSetupSubmission(maze.cells, maze.entrances, maze.items, { difficulty: room.difficulty });
     if (!result.valid) return error(socket, "Maze setup is invalid.", "INVALID_MAZE", result.errors);
     room.mazes[player.id] = { width: 10, height: 10, cells: maze.cells, entrances: maze.entrances, items: maze.items };
     room.setups[player.id] = { submitted: true, submittedAt: Date.now() }; player.submitted = true;

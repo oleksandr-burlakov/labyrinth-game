@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { validateItems, validateMaze, validateSetupSubmission } from "./validation.js";
 import { WALLS } from "./constants.js";
-import { projectRoom } from "./models.js";
+import { countInternalWalls, projectRoom } from "./index.js";
+import { MazeGenerator } from "../client/services/maze-generator.js";
 
 function openMaze() {
   return Array.from({ length: 10 }, (_, y) => Array.from({ length: 10 }, (_, x) =>
@@ -10,6 +11,11 @@ function openMaze() {
 
 describe("maze validation", () => {
   it("accepts a connected symmetric maze", () => expect(validateMaze(openMaze()).valid).toBe(true));
+  it("counts each internal wall once and ignores border walls", () => {
+    const maze = openMaze();
+    maze[0][0] |= WALLS.EAST; maze[0][1] |= WALLS.WEST;
+    expect(countInternalWalls(maze)).toBe(1);
+  });
   it("rejects asymmetric walls and disconnected cells", () => {
     const maze = openMaze(); maze[0][0] |= WALLS.EAST; expect(validateMaze(maze).valid).toBe(false);
   });
@@ -46,5 +52,15 @@ describe("setup validation", () => {
     expect(validateSetupSubmission(maze, entrances, items).valid).toBe(true);
     maze[0][2] &= ~WALLS.NORTH;
     expect(validateSetupSubmission(maze, entrances, items).valid).toBe(false);
+  });
+  it("enforces the selected difficulty wall cap", () => {
+    const maze = new MazeGenerator(10, 10).generate({ maxInternalWalls: 46 });
+    const entrances = [{ x: 1, y: 0, side: "north" }, { x: 9, y: 3, side: "east" }, { x: 8, y: 9, side: "south" }, { x: 0, y: 6, side: "west" }];
+    const items = [...Array.from({ length: 4 }, (_, x) => ({ type: "treasure", x: x + 1, y: 1 })), { type: "walking_stick", x: 5, y: 2 }, { type: "crossbow", x: 6, y: 2 }, { type: "pirate_glass", x: 7, y: 2 }, { type: "bear_trap", x: 8, y: 2 }];
+    expect(countInternalWalls(maze)).toBe(46);
+    expect(validateSetupSubmission(maze, entrances, items, { difficulty: "easy" }).valid).toBe(false);
+    expect(validateSetupSubmission(maze, entrances, items, { difficulty: "hard" }).valid).toBe(true);
+    const normalMaze = new MazeGenerator(10, 10).generate({ maxInternalWalls: 66 });
+    expect(validateSetupSubmission(normalMaze, entrances, items, { difficulty: "normal" }).valid).toBe(false);
   });
 });

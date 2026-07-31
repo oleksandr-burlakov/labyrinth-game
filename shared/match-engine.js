@@ -1,4 +1,4 @@
-import { DIRECTIONS, ITEM_TYPES, MAZE_HEIGHT, MAZE_WIDTH, ROOM_PHASES } from "./constants.js";
+import { DIRECTIONS, ITEM_TYPES, MAZE_HEIGHT, MAZE_WIDTH, ROOM_PHASES, TURN_TRANSITION_MS } from "./constants.js";
 import { inBounds } from "./maze.js";
 
 const DIRECTION_TO_ENTRANCE = Object.freeze({ up: "north", right: "east", down: "south", left: "west" });
@@ -35,14 +35,15 @@ function consumeItem(room, playerId, targetOwnerId, position, events) {
   if (item.type === ITEM_TYPES.BEAR_TRAP) playerState.skipTurns += 3;
   events.push({ type: "item_picked", playerId, itemType: item.type, position: clone(position), bonusOwnerId: item.type === ITEM_TYPES.CROSSBOW ? targetOwnerId : playerId });
 }
-function beginTurn(room, playerId, now, events) {
+function beginTurn(room, playerId, now, events, transitionMs = 0) {
   const playerState = stateFor(room, playerId);
-  room.turn = { activePlayerId: playerId, turnNumber: (room.turn?.turnNumber ?? 0) + 1, movesRemaining: movementAllowance(playerState), deadlineAt: room.turnTimerSeconds ? now + room.turnTimerSeconds * 1000 : null };
+  const availableAt = now + transitionMs;
+  room.turn = { activePlayerId: playerId, turnNumber: (room.turn?.turnNumber ?? 0) + 1, movesRemaining: movementAllowance(playerState), availableAt, deadlineAt: room.turnTimerSeconds ? availableAt + room.turnTimerSeconds * 1000 : null };
   events.push({ type: "turn_started", playerId, turn: clone(room.turn) });
 }
 function advanceTurn(room, now, events) {
   let nextPlayerId = otherPlayerId(room, room.turn.activePlayerId);
-  for (let skipped = 0; skipped < room.players.length; skipped++) {
+  while (nextPlayerId) {
     const nextState = stateFor(room, nextPlayerId);
     if (nextState.skipTurns > 0) {
       nextState.skipTurns--;
@@ -50,7 +51,7 @@ function advanceTurn(room, now, events) {
       nextPlayerId = otherPlayerId(room, nextPlayerId);
       continue;
     }
-    beginTurn(room, nextPlayerId, now, events);
+    beginTurn(room, nextPlayerId, now, events, TURN_TRANSITION_MS);
     return;
   }
 }
@@ -92,6 +93,7 @@ export function chooseStart(room, playerId, position, { now = Date.now(), random
 export function move(room, playerId, directionName, { now = Date.now() } = {}) {
   if (room.phase !== ROOM_PHASES.PLAYING) return fail("MATCH_NOT_PLAYING", "The match is not currently accepting moves.");
   if (room.turn?.activePlayerId !== playerId) return fail("NOT_YOUR_TURN", "It is not your turn.");
+  if (room.turn?.availableAt && now < room.turn.availableAt) return fail("TURN_NOT_READY", "Wait for the previous move to finish.");
   const direction = DIRECTIONS[directionName]; if (!direction) return fail("INVALID_DIRECTION", "Direction must be up, right, down, or left.");
   const next = clone(room); const events = []; const playerState = stateFor(next, playerId); const maze = next.mazes[playerState.targetMazeOwnerId]; const position = playerState.position;
   const side = DIRECTION_TO_ENTRANCE[directionName]; const blockedByWall = Boolean(maze.cells[position.y][position.x] & direction.wall);
@@ -107,8 +109,9 @@ export function move(room, playerId, directionName, { now = Date.now() } = {}) {
   consumeItem(next, playerId, playerState.targetMazeOwnerId, target, events);
   if (playerState.hasPirateGlass) {
     const forward = { x: target.x + direction.dx, y: target.y + direction.dy };
-    if (inBounds(forward.x, forward.y)) revealCell(next, playerId, forward);
-    revealEdge(next, playerId, target, side, Boolean(maze.cells[target.y][target.x] & direction.wall));
+    const blockedAhead = Boolean(maze.cells[target.y][target.x] & direction.wall);
+    revealEdge(next, playerId, target, side, blockedAhead);
+    if (!blockedAhead && inBounds(forward.x, forward.y)) revealCell(next, playerId, forward);
   }
   finishAttempt(next, now, events);
   return { ok: true, room: next, events };
@@ -117,6 +120,7 @@ export function move(room, playerId, directionName, { now = Date.now() } = {}) {
 export function extractTreasure(room, playerId, directionName, { now = Date.now() } = {}) {
   if (room.phase !== ROOM_PHASES.PLAYING) return fail("MATCH_NOT_PLAYING", "The match is not currently accepting moves.");
   if (room.turn?.activePlayerId !== playerId) return fail("NOT_YOUR_TURN", "It is not your turn.");
+  if (room.turn?.availableAt && now < room.turn.availableAt) return fail("TURN_NOT_READY", "Wait for the previous move to finish.");
   const direction = DIRECTIONS[directionName]; if (!direction) return fail("INVALID_DIRECTION", "Direction must be up, right, down, or left.");
   const next = clone(room); const events = []; const playerState = stateFor(next, playerId); const maze = next.mazes[playerState.targetMazeOwnerId]; const side = DIRECTION_TO_ENTRANCE[directionName];
   const target = { x: playerState.position.x + direction.dx, y: playerState.position.y + direction.dy };

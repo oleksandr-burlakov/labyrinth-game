@@ -40,7 +40,7 @@ export class MazeGenerator {
     return list;
   }
 
-  generate() {
+  generate({ maxInternalWalls } = {}) {
     // 1. Initialize map array filled with solid walls (15 = N|E|S|W)
     // Structured as map[y][x] to directly feed into Phaser's tilemap system
     const mapArray = Array.from({ length: this.height }, () =>
@@ -84,6 +84,23 @@ export class MazeGenerator {
       } else if (stack.length > 0) {
         current = stack.pop();
       }
+    }
+
+    // A perfect maze has the greatest possible wall density while still keeping
+    // every cell reachable. Open random existing walls to meet lower difficulty caps.
+    const internalWalls = [];
+    for (let y = 0; y < this.height; y++) for (let x = 0; x < this.width; x++) {
+      if (x + 1 < this.width && (mapArray[y][x] & this.E)) internalWalls.push({ x, y, flag: this.E, oppositeFlag: this.W, nx: x + 1, ny: y });
+      if (y + 1 < this.height && (mapArray[y][x] & this.S)) internalWalls.push({ x, y, flag: this.S, oppositeFlag: this.N, nx: x, ny: y + 1 });
+    }
+    const targetWallCount = Math.max(0, Math.min(internalWalls.length, maxInternalWalls ?? internalWalls.length));
+    for (let index = internalWalls.length - 1; index > 0; index--) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [internalWalls[index], internalWalls[swapIndex]] = [internalWalls[swapIndex], internalWalls[index]];
+    }
+    for (const wall of internalWalls.slice(0, internalWalls.length - targetWallCount)) {
+      mapArray[wall.y][wall.x] &= ~wall.flag;
+      mapArray[wall.ny][wall.nx] &= ~wall.oppositeFlag;
     }
 
     // Open exactly one distinct border cell on each edge. Internal walls remain symmetric.

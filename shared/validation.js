@@ -1,5 +1,5 @@
-import { ITEM_QUOTAS, MAZE_HEIGHT, MAZE_WIDTH, WALLS } from "./constants.js";
-import { areWallsSymmetric, reachableCells } from "./maze.js";
+import { DEFAULT_DIFFICULTY, getDifficultyWallLimit, ITEM_QUOTAS, MAZE_HEIGHT, MAZE_WIDTH, WALLS } from "./constants.js";
+import { areWallsSymmetric, countInternalWalls, reachableCells } from "./maze.js";
 
 export function validateMaze(maze, options = {}) {
   const width = options.width ?? MAZE_WIDTH; const height = options.height ?? MAZE_HEIGHT;
@@ -60,11 +60,13 @@ export function validateEntrances(maze, entrances = []) {
   return { valid: errors.length === 0, errors };
 }
 
-export function validateSetupSubmission(maze, entrances, items) {
+export function validateSetupSubmission(maze, entrances, items, options = {}) {
   const mazeResult = validateMaze(maze);
   const entranceResult = validateEntrances(maze, entrances);
   const itemResult = validateItems(items);
   const entranceCells = new Set((entrances ?? []).map(({ x, y }) => `${x},${y}`));
   const itemErrors = (items ?? []).filter((item) => item && entranceCells.has(`${item.x},${item.y}`)).length ? ["items cannot be placed on entrances"] : [];
-  return { valid: mazeResult.valid && entranceResult.valid && itemResult.valid && itemErrors.length === 0, errors: [...mazeResult.errors, ...entranceResult.errors, ...itemResult.errors, ...itemErrors] };
+  const limit = getDifficultyWallLimit(options.difficulty ?? DEFAULT_DIFFICULTY);
+  const wallErrors = limit !== null && countInternalWalls(maze) > limit ? [`${options.difficulty ?? DEFAULT_DIFFICULTY} difficulty allows at most ${limit} internal walls`] : [];
+  return { valid: mazeResult.valid && entranceResult.valid && itemResult.valid && itemErrors.length === 0 && wallErrors.length === 0, errors: [...mazeResult.errors, ...entranceResult.errors, ...itemResult.errors, ...itemErrors, ...wallErrors] };
 }

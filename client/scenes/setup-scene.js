@@ -1,5 +1,6 @@
 import { socket, EVENTS } from "../services/socket-service.js";
 import { MazeGenerator } from "../services/maze-generator.js";
+import { getDifficultyWallLimit } from "@labyrinth/shared";
 
 const ITEMS = [
   { type: "treasure", label: "Treasure ×4", symbol: "◆", color: "#fc5", quota: 4 },
@@ -52,13 +53,23 @@ export class SetupScene extends Phaser.Scene {
   }
 
   createDraft() {
-    this.maze = { cells: new MazeGenerator(10, 10).generate(), entrances: [{ x: 1, y: 0, side: "north" }, { x: 8, y: 9, side: "south" }, { x: 9, y: 3, side: "east" }, { x: 0, y: 6, side: "west" }], items: [
+    this.maze = { cells: new MazeGenerator(10, 10).generate({ maxInternalWalls: this.wallLimit() }), entrances: [{ x: 1, y: 0, side: "north" }, { x: 8, y: 9, side: "south" }, { x: 9, y: 3, side: "east" }, { x: 0, y: 6, side: "west" }], items: [
       { type: "treasure", x: 1, y: 1 }, { type: "treasure", x: 3, y: 3 }, { type: "treasure", x: 6, y: 6 }, { type: "treasure", x: 8, y: 8 },
       { type: "walking_stick", x: 2, y: 7 }, { type: "crossbow", x: 7, y: 2 }, { type: "pirate_glass", x: 4, y: 5 }, { type: "bear_trap", x: 5, y: 4 },
     ] };
-    this.activeItem = null; this.submitted = false; this.drawDraft(); this.setStatus("Draft ready. Move items or edit the maze before submitting.");
+    this.activeItem = null; this.submitted = false; this.drawDraft(); this.setStatus(`Draft ready (${this.room.difficulty ?? "normal"} difficulty). ${this.wallStatus()} Move items or edit the maze before submitting.`);
   }
   setStatus(message, color = "#aaa") { this.status.setText(message).setColor(color); }
+  wallLimit() { return getDifficultyWallLimit(this.room.difficulty); }
+  wallCount() {
+    let count = 0;
+    for (let y = 0; y < 10; y++) for (let x = 0; x < 10; x++) {
+      if (x < 9 && (this.maze.cells[y][x] & WALL.right)) count++;
+      if (y < 9 && (this.maze.cells[y][x] & WALL.bottom)) count++;
+    }
+    return count;
+  }
+  wallStatus() { const limit = this.wallLimit(); return limit === null ? `${this.wallCount()} internal walls (Hard has no cap).` : `${this.wallCount()}/${limit} internal walls.`; }
 
   drawDraft() {
     if (!this.maze) return; const layout = this.getLayout(); const { gridX, gridY, cell } = layout;
@@ -84,10 +95,10 @@ export class SetupScene extends Phaser.Scene {
     if (entrance.side === "west") this.draftGraphics.lineBetween(left, top, left, top + cell);
   }
   drawPalette(layout) {
-    const { paletteX: x, paletteY: y } = layout; this.paletteVisuals.push(this.add.text(x, y, "Required items", { fontSize: "16px", fill: "#fff" }));
+    const { paletteX: x, paletteY: y } = layout; this.paletteVisuals.push(this.add.text(x, y, `Required items\n${this.wallStatus()}`, { fontSize: "16px", fill: "#fff" }));
     ITEMS.forEach((definition, index) => {
       const placed = this.maze.items.filter((item) => item.type === definition.type).length; const active = this.activeItem?.type === definition.type; const column = layout.compact ? index % 2 : 0; const row = layout.compact ? Math.floor(index / 2) : index;
-      const text = this.add.text(x + column * Math.floor((layout.width - 28) / 2), y + 28 + row * (layout.compact ? 52 : 58), `${definition.symbol} ${definition.label}\n${placed}/${definition.quota}`, { fontSize: "14px", fill: active ? "#fff" : definition.color, backgroundColor: active ? "#555" : "#222", padding: { x: 5, y: 4 } }).setInteractive({ useHandCursor: true });
+      const text = this.add.text(x + column * Math.floor((layout.width - 28) / 2), y + 48 + row * (layout.compact ? 52 : 58), `${definition.symbol} ${definition.label}\n${placed}/${definition.quota}`, { fontSize: "14px", fill: active ? "#fff" : definition.color, backgroundColor: active ? "#555" : "#222", padding: { x: 5, y: 4 } }).setInteractive({ useHandCursor: true });
       text.on("pointerdown", () => this.selectPaletteItem(definition)); this.paletteVisuals.push(text);
     });
   }
@@ -101,9 +112,11 @@ export class SetupScene extends Phaser.Scene {
     const cell = this.getBoardCell(pointer); if (!cell) return; const item = this.maze.items.find((candidate) => candidate.x === cell.x && candidate.y === cell.y);
     if (item && !this.activeItem) { this.maze.items = this.maze.items.filter((candidate) => candidate !== item); this.activeItem = { type: item.type }; this.submitted = false; this.drawDraft(); return this.setStatus(`Picked up ${item.type}. Click an empty cell to place it.`); }
     if (this.activeItem) return this.placeActiveItem(cell); const side = this.getNearestEdge(pointer, cell); if (!side) return; if (this.isExterior(cell, side)) return this.relocateEntrance(cell, side);
-    this.drag = { desiredWall: !(this.maze.cells[cell.y][cell.x] & WALL[side]), edited: new Set() }; this.applyWallEdit(cell, side);
+    const desiredWall = !(this.maze.cells[cell.y][cell.x] & WALL[side]);
+    if (desiredWall && this.wallLimit() !== null && this.wallCount() >= this.wallLimit()) return this.setStatus(`${this.room.difficulty} difficulty allows at most ${this.wallLimit()} internal walls.`, "#f88");
+    this.drag = { desiredWall, edited: new Set() }; this.applyWallEdit(cell, side);
   }
-  handlePointerMove(pointer) { if (!pointer.isDown || !this.drag) return; const cell = this.getBoardCell(pointer); if (!cell) return; const side = this.getNearestEdge(pointer, cell); if (!side || this.isExterior(cell, side)) return; this.applyWallEdit(cell, side); }
+  handlePointerMove(pointer) { if (!pointer.isDown || !this.drag) return; const cell = this.getBoardCell(pointer); if (!cell) return; const side = this.getNearestEdge(pointer, cell); if (!side || this.isExterior(cell, side)) return; if (this.drag.desiredWall && this.wallLimit() !== null && this.wallCount() >= this.wallLimit()) { this.drag = null; return this.setStatus(`${this.room.difficulty} difficulty allows at most ${this.wallLimit()} internal walls.`, "#f88"); } this.applyWallEdit(cell, side); }
   applyWallEdit(cell, side) { const editKey = `${cell.x},${cell.y},${side}`; if (this.drag.edited.has(editKey)) return; this.drag.edited.add(editKey); const neighbor = { x: cell.x + DELTA[side].x, y: cell.y + DELTA[side].y }; if (this.drag.desiredWall) { this.maze.cells[cell.y][cell.x] |= WALL[side]; this.maze.cells[neighbor.y][neighbor.x] |= WALL[OPPOSITE[side]]; } else { this.maze.cells[cell.y][cell.x] &= ~WALL[side]; this.maze.cells[neighbor.y][neighbor.x] &= ~WALL[OPPOSITE[side]]; } this.submitted = false; this.drawDraft(); this.setStatus(this.drag.desiredWall ? "Drawing walls…" : "Removing walls…"); }
   relocateEntrance(cell, edge) { const side = ENTRANCE_SIDE[edge]; if (this.maze.entrances.some((entrance) => entrance.side !== side && entrance.x === cell.x && entrance.y === cell.y)) return this.setStatus("Entrance cells must be distinct.", "#f88"); const previous = this.maze.entrances.find((entrance) => entrance.side === side); const flag = WALL[edge]; this.maze.cells[previous.y][previous.x] |= flag; this.maze.cells[cell.y][cell.x] &= ~flag; previous.x = cell.x; previous.y = cell.y; this.submitted = false; this.drawDraft(); this.setStatus(`${side} entrance moved.`); }
   placeActiveItem(cell) { if (this.maze.items.some((item) => item.x === cell.x && item.y === cell.y)) return this.setStatus("That cell already contains an item.", "#f88"); if (this.maze.entrances.some((entrance) => entrance.x === cell.x && entrance.y === cell.y)) return this.setStatus("Items cannot be placed on entrances.", "#f88"); this.maze.items.push({ type: this.activeItem.type, x: cell.x, y: cell.y }); this.activeItem = null; this.submitted = false; this.drawDraft(); this.setStatus("Item placed."); }

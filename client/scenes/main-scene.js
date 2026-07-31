@@ -1,5 +1,5 @@
 import { socket, EVENTS } from "../services/socket-service.js";
-import { canSendMove, eventText, perspectiveFor, secondsRemaining } from "../services/match-view.js";
+import { canSendMove, eventText, isOuterMazeEdge, perspectiveFor, secondsRemaining } from "../services/match-view.js";
 
 const ITEM_VISUALS = {
   treasure: { symbol: "◆", color: "#ffd166" }, walking_stick: { symbol: "│", color: "#8cff98" },
@@ -11,7 +11,10 @@ const KEY_DIRECTIONS = { left: "left", right: "right", up: "up", down: "down", A
 export class MainScene extends Phaser.Scene {
   constructor() { super("MainScene"); }
 
-  init({ room } = {}) { this.room = room ?? null; this.pendingMove = false; this.connected = socket.connected; this.activity = []; this.flash = null; }
+  init({ room } = {}) {
+    this.room = room ?? null; this.pendingMove = false; this.connected = socket.connected; this.activity = []; this.flash = null;
+    this.presentationBusy = false; this.presentationPerspective = null; this.presentationQueue = []; this.presentationTimer = null; this.motionMarker = null;
+  }
 
   create() {
     this.graphics = this.add.graphics();
@@ -23,9 +26,10 @@ export class MainScene extends Phaser.Scene {
     this.log = this.add.text(16, 0, "", { fontSize: "13px", fill: "#ddd", wordWrap: { width: 360 } });
     this.banner = this.add.text(0, 0, "", { fontSize: "16px", fill: "#fff", backgroundColor: "#263445", padding: { x: 8, y: 5 } }).setVisible(false);
     this.overlay = this.add.text(0, 0, "", { fontSize: "20px", fill: "#fff", align: "center", backgroundColor: "#18202ddd", padding: { x: 16, y: 14 }, wordWrap: { width: 330 } }).setOrigin(0.5).setVisible(false);
+    this.motionMarker = this.add.circle(0, 0, 10, 0x55ddff).setDepth(5).setVisible(false);
     this.cursors = this.input.keyboard.createCursorKeys(); this.keys = this.input.keyboard.addKeys("W,A,S,D");
     this.createDirectionButtons();
-    this.onState = ({ room, events = [] }) => { this.room = room; this.pendingMove = false; this.recordEvents(events); this.render(); };
+    this.onState = ({ room, events = [] }) => this.receiveState(room, events);
     this.onWarning = () => { this.showBanner("Only 5 seconds remain!", "#ff8f8f"); this.render(); };
     this.onFinished = ({ result }) => { this.showBanner(result.winnerId === socket.id ? "You won!" : "Opponent won.", "#ffd166", 5000); this.render(); };
     this.onError = ({ message }) => { this.pendingMove = false; this.showBanner(message, "#ff8f8f", 3500); this.render(); };
@@ -40,7 +44,8 @@ export class MainScene extends Phaser.Scene {
   cleanup() {
     socket.off(EVENTS.STATE, this.onState); socket.off(EVENTS.TURN_WARNING, this.onWarning); socket.off(EVENTS.FINISHED, this.onFinished); socket.off(EVENTS.ERROR, this.onError);
     socket.off("disconnect", this.onDisconnect); socket.off("connect", this.onConnect); socket.off("reconnect_attempt", this.onDisconnect);
-    this.input.off("pointerdown", this.onPointerDown); this.scale.off("resize", this.render, this); this.bannerTimer && this.bannerTimer.remove();
+    this.input.off("pointerdown", this.onPointerDown); this.scale.off("resize", this.render, this); this.bannerTimer && this.bannerTimer.remove(); this.presentationTimer?.remove();
+    this.tweens.killTweensOf(this.graphics); this.tweens.killTweensOf(this.motionMarker); this.motionMarker?.destroy();
   }
 
   createDirectionButtons() {
@@ -65,7 +70,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   sendMove(direction) {
-    if (!canSendMove(this.room, socket.id, this.connected, this.pendingMove)) return;
+    if (!canSendMove(this.room, socket.id, this.connected, this.pendingMove || this.presentationBusy)) return;
     this.pendingMove = true; socket.emit(EVENTS.MOVE, { direction }); this.render();
   }
 
@@ -82,6 +87,69 @@ export class MainScene extends Phaser.Scene {
       if (["move_blocked", "item_picked", "treasure_extracted"].includes(event.type)) this.flash = { ...event, until: Date.now() + 650 };
     }
     this.activity = this.activity.slice(0, 5);
+  }
+
+  shouldPresent(events) {
+    return events.some((event) => ["move_succeeded", "move_blocked", "treasure_extracted", "turn_expired", "turn_skipped"].includes(event.type));
+  }
+
+  markerFor(room, perspective) {
+    return perspective === "observer" ? room?.match?.opponent?.position : room?.match?.player?.position;
+  }
+
+  markerPoint(position, layout = this.layout) {
+    return { x: layout.gridX + position.x * layout.cell + layout.cell / 2, y: layout.gridY + position.y * layout.cell + layout.cell / 2 };
+  }
+
+  outcomeMessage(events) {
+    const item = events.find((event) => event.type === "item_picked");
+    if (item) return { message: `Found ${item.itemType.replaceAll("_", " ")}!`, color: ITEM_VISUALS[item.itemType]?.color ?? "#ffd166" };
+    if (events.some((event) => event.type === "treasure_extracted")) return { message: "Treasure extracted!", color: "#ffd166" };
+    if (events.some((event) => event.type === "move_blocked")) return { message: "A wall blocks the way.", color: "#ff8f8f" };
+    if (events.some((event) => event.type === "turn_expired")) return { message: "Turn expired.", color: "#ff8f8f" };
+    if (events.some((event) => event.type === "turn_skipped")) return { message: "Turn skipped by trap.", color: "#ff8f8f" };
+    return null;
+  }
+
+  receiveState(room, events) {
+    this.pendingMove = false;
+    if (!this.room || !this.shouldPresent(events)) {
+      if (this.presentationBusy) this.presentationQueue.push({ room, events });
+      else { this.room = room; this.recordEvents(events); this.render(); }
+      return;
+    }
+    this.presentationQueue.push({ room, events }); this.processPresentationQueue();
+  }
+
+  processPresentationQueue() {
+    if (this.presentationBusy || !this.presentationQueue.length) return;
+    const next = this.presentationQueue.shift(); const previousRoom = this.room;
+    if (!this.shouldPresent(next.events)) { this.room = next.room; this.recordEvents(next.events); this.render(); this.processPresentationQueue(); return; }
+    if (!previousRoom?.match) { this.room = next.room; this.recordEvents(next.events); this.render(); this.processPresentationQueue(); return; }
+    this.presentationBusy = true; this.presentationPerspective = perspectiveFor(previousRoom, socket.id); this.recordEvents(next.events);
+    const outcome = this.outcomeMessage(next.events); if (outcome) this.showBanner(outcome.message, outcome.color, 900);
+    const movement = next.events.find((event) => event.type === "move_succeeded"); const from = this.markerFor(previousRoom, this.presentationPerspective);
+    if (!movement || !from) return this.finishMovePresentation(next);
+    const layout = this.layout; const fromPoint = this.markerPoint(from, layout); const targetPoint = this.markerPoint(movement.position, layout);
+    this.motionMarker.setFillStyle(this.presentationPerspective === "observer" ? 0xffa45c : 0x55ddff).setRadius(Math.max(8, layout.cell * .22)).setPosition(fromPoint.x, fromPoint.y).setVisible(true);
+    this.render();
+    this.tweens.add({ targets: this.motionMarker, x: targetPoint.x, y: targetPoint.y, duration: 250, ease: "Sine.inOut", onComplete: () => this.finishMovePresentation(next) });
+  }
+
+  finishMovePresentation(next) {
+    this.motionMarker.setVisible(false); this.room = next.room; this.render();
+    const availableAt = next.room.turn?.availableAt; const hold = availableAt ? Math.max(0, availableAt - Date.now()) : 600;
+    this.presentationTimer = this.time.delayedCall(hold, () => this.completeMovePresentation());
+  }
+
+  completeMovePresentation() {
+    const nextPerspective = perspectiveFor(this.room, socket.id);
+    const release = () => { this.presentationPerspective = null; this.presentationBusy = false; this.flash = null; this.render(); this.processPresentationQueue(); };
+    if (this.presentationPerspective === nextPerspective) return release();
+    this.tweens.add({ targets: this.graphics, alpha: 0, duration: 100, onComplete: () => {
+      this.presentationPerspective = null; this.render();
+      this.tweens.add({ targets: this.graphics, alpha: 1, duration: 120, onComplete: release });
+    } });
   }
 
   showBanner(message, color = "#fff", duration = 2500) {
@@ -112,7 +180,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   drawBoard(layout) {
-    const perspective = perspectiveFor(this.room, socket.id); const player = this.localPlayer;
+    const perspective = this.presentationPerspective ?? perspectiveFor(this.room, socket.id); const player = this.localPlayer;
     const fog = this.room.fog?.[socket.id] ?? { discoveredCells: [], revealedEdges: [] };
     const knownCells = new Set(fog.discoveredCells.map(({ x, y }) => `${x},${y}`)); const edges = new Map((fog.revealedEdges ?? []).map((edge) => [`${edge.x},${edge.y},${edge.side}`, edge]));
     const authoredMaze = this.room.mazes?.[socket.id]; const maze = perspective === "observer" ? authoredMaze : null;
@@ -125,7 +193,7 @@ export class MainScene extends Phaser.Scene {
       for (const [side, dx, dy, wall] of [["north", 0, 0, 1], ["east", 1, 0, 2], ["south", 0, 1, 4], ["west", 0, 0, 8]]) {
         const edge = edges.get(`${x},${y},${side}`); const blocked = perspective === "observer" ? Boolean(maze?.cells[y][x] & wall) : edge?.blocked;
         if (blocked) this.drawEdge(left, top, layout.cell, side, 0xf0f3f5, 3);
-        if (visible && edge && !edge.blocked && (x === 0 || y === 0 || x === 9 || y === 9)) this.drawEdge(left, top, layout.cell, side, 0x55ddff, 4);
+        if (visible && edge && !edge.blocked && isOuterMazeEdge(x, y, side)) this.drawEdge(left, top, layout.cell, side, 0x55ddff, 4);
       }
     }
     if (perspective === "observer") for (const entrance of maze?.entrances ?? []) {
@@ -133,9 +201,13 @@ export class MainScene extends Phaser.Scene {
       this.drawEdge(left, top, layout.cell, entrance.side, 0x55ddff, 4);
     }
     for (const item of items) this.drawItem(layout, item);
-    const marker = perspective === "observer" ? this.room.match?.opponent?.position : player?.position;
-    if (marker) { const px = layout.gridX + marker.x * layout.cell + layout.cell / 2; const py = layout.gridY + marker.y * layout.cell + layout.cell / 2; this.graphics.fillStyle(perspective === "observer" ? 0xffa45c : 0x55ddff, 1).fillCircle(px, py, Math.max(8, layout.cell * .22)); }
-    if (this.flash?.until > Date.now() && this.flash.position) { const { x, y } = this.flash.position; const left = layout.gridX + x * layout.cell; const top = layout.gridY + y * layout.cell; this.graphics.lineStyle(4, this.flash.type === "move_blocked" ? 0xff6b6b : 0xffd166, 1).strokeRect(left + 2, top + 2, layout.cell - 4, layout.cell - 4); }
+    const marker = this.markerFor(this.room, perspective);
+    if (marker && !this.motionMarker?.visible) { const px = layout.gridX + marker.x * layout.cell + layout.cell / 2; const py = layout.gridY + marker.y * layout.cell + layout.cell / 2; this.graphics.fillStyle(perspective === "observer" ? 0xffa45c : 0x55ddff, 1).fillCircle(px, py, Math.max(8, layout.cell * .22)); }
+    if (this.flash?.until > Date.now() && this.flash.position) {
+      const { x, y } = this.flash.position; const left = layout.gridX + x * layout.cell; const top = layout.gridY + y * layout.cell;
+      if (this.flash.type === "move_blocked") this.drawEdge(left, top, layout.cell, { up: "north", right: "east", down: "south", left: "west" }[this.flash.direction], 0xff6b6b, 5);
+      else this.graphics.lineStyle(4, 0xffd166, 1).strokeRect(left + 2, top + 2, layout.cell - 4, layout.cell - 4);
+    }
   }
 
   drawEdge(left, top, cell, side, color, width) {
@@ -152,17 +224,18 @@ export class MainScene extends Phaser.Scene {
   }
 
   renderStatus() {
-    const layout = this.layout; const player = this.localPlayer; const perspective = perspectiveFor(this.room, socket.id); const isMyTurn = this.room.turn?.activePlayerId === socket.id; const remaining = secondsRemaining(this.room.turn?.deadlineAt);
+    const layout = this.layout; const player = this.localPlayer; const perspective = this.presentationPerspective ?? perspectiveFor(this.room, socket.id); const isMyTurn = this.room.turn?.activePlayerId === socket.id; const remaining = secondsRemaining(this.room.turn?.deadlineAt);
     this.title.setText(`Room ${this.room.code} — ${perspective === "observer" ? "your maze" : "opponent maze"}`);
     if (this.room.phase === "starting") this.status.setText(player?.position ? "Start selected. Waiting for your opponent…" : "Choose any cell as your starting position.");
     else if (this.room.phase === "finished") this.status.setText("Match complete.");
+    else if (this.presentationBusy) this.status.setText("Resolving move…");
     else this.status.setText(isMyTurn ? `Your turn: ${this.room.turn.movesRemaining} attempt(s)${remaining !== null ? ` · ${remaining}s` : " · no timer"}` : `Opponent's turn${remaining !== null ? ` · ${remaining}s` : ""}`);
-    this.status.setColor(isMyTurn && remaining !== null && remaining <= 5 ? "#ff8f8f" : isMyTurn ? "#8cff98" : "#aaa");
+    this.status.setColor(this.presentationBusy ? "#8cddff" : isMyTurn && remaining !== null && remaining <= 5 ? "#ff8f8f" : isMyTurn ? "#8cff98" : "#aaa");
     this.score.setText((this.room.match?.scores ?? []).map((entry) => `${entry.name}: ${entry.extractedTreasures}/4`).join("   "));
     this.effects.setText(`Inventory: ${player?.carriedTreasure ? "◆ treasure" : "no treasure"} · +${player?.movementBonus ?? 0} moves · ${player?.hasPirateGlass ? "pirate glass" : "no glass"}${player?.skipTurns ? ` · trap: ${player.skipTurns} turns` : ""}`);
     this.hint.setText(this.connected ? (perspective === "observer" ? "Watch your opponent explore the maze you built." : "Use arrows, WASD, or the direction pad.") : "Reconnecting…");
     this.log.setText(this.activity.join("\n"));
-    const enabled = canSendMove(this.room, socket.id, this.connected, this.pendingMove); for (const button of Object.values(this.directionButtons)) button.setAlpha(enabled ? 1 : .35).disableInteractive();
+    const enabled = canSendMove(this.room, socket.id, this.connected, this.pendingMove || this.presentationBusy); for (const button of Object.values(this.directionButtons)) button.setAlpha(enabled ? 1 : .35).disableInteractive();
     if (enabled) for (const button of Object.values(this.directionButtons)) button.setInteractive({ useHandCursor: true });
     if (layout.compact && layout.height < 650) this.hint.setVisible(false); else this.hint.setVisible(true);
   }
