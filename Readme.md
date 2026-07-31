@@ -2,6 +2,8 @@
 
 This is the web version of the game where you can generate maze and set up some items and play it with your friend. The idea is to keep it simple to deploy and to start playing.
 
+Small update
+
 What players can do:
 
 - They can generate maze 10x10 grid cells (this is the main game scene). This maze will be used as maze for your oponent.
