@@ -2,7 +2,7 @@
 
 This is the web version of the game where you can generate maze and set up some items and play it with your friend. The idea is to keep it simple to deploy and to start playing.
 
-Small update
+Small update to trigger deploy
 
 What players can do:
 
