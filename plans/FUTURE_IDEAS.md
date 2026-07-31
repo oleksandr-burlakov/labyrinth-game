@@ -4,6 +4,8 @@
   - Ui should be aligned to landscape orientation to keep everything game related on screen without empty spaces
   - Also it's not possible to scroll maze when screen are smaller (so I am freezen in page zoom position)
 
+- Add instruction and guidlines
+
 - General styling and ui updates:
   - Think of improvement GUI:
     - Maze playing:

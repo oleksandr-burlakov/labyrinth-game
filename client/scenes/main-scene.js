@@ -1,5 +1,6 @@
 import { socket, EVENTS } from "../services/socket-service.js";
 import { canSendMove, eventText, isOuterMazeEdge, perspectiveFor, secondsRemaining } from "../services/match-view.js";
+import { BoardViewport } from "../services/board-viewport.js";
 
 const ITEM_VISUALS = {
   treasure: { symbol: "◆", color: "#ffd166" }, walking_stick: { symbol: "│", color: "#8cff98" },
@@ -14,6 +15,7 @@ export class MainScene extends Phaser.Scene {
   init({ room } = {}) {
     this.room = room ?? null; this.pendingMove = false; this.connected = socket.connected; this.activity = []; this.flash = null;
     this.presentationBusy = false; this.presentationPerspective = null; this.presentationQueue = []; this.presentationTimer = null; this.motionMarker = null;
+    this.viewport = new BoardViewport(); this.touchPoints = new Map(); this.touchGesture = null;
   }
 
   create() {
@@ -37,14 +39,15 @@ export class MainScene extends Phaser.Scene {
     this.onConnect = () => { this.connected = true; this.render(); };
     socket.on(EVENTS.STATE, this.onState); socket.on(EVENTS.TURN_WARNING, this.onWarning); socket.on(EVENTS.FINISHED, this.onFinished); socket.on(EVENTS.ERROR, this.onError);
     socket.on("disconnect", this.onDisconnect); socket.on("connect", this.onConnect); socket.on("reconnect_attempt", this.onDisconnect);
-    this.onPointerDown = (pointer) => this.chooseStart(pointer); this.input.on("pointerdown", this.onPointerDown); this.scale.on("resize", this.render, this);
+    this.onPointerDown = (pointer) => this.handlePointerDown(pointer); this.onPointerMove = (pointer) => this.handlePointerMove(pointer); this.onPointerUp = (pointer) => this.handlePointerUp(pointer);
+    this.input.on("pointerdown", this.onPointerDown); this.input.on("pointermove", this.onPointerMove); this.input.on("pointerup", this.onPointerUp); this.scale.on("resize", this.render, this);
     this.events.once("shutdown", () => this.cleanup()); this.render();
   }
 
   cleanup() {
     socket.off(EVENTS.STATE, this.onState); socket.off(EVENTS.TURN_WARNING, this.onWarning); socket.off(EVENTS.FINISHED, this.onFinished); socket.off(EVENTS.ERROR, this.onError);
     socket.off("disconnect", this.onDisconnect); socket.off("connect", this.onConnect); socket.off("reconnect_attempt", this.onDisconnect);
-    this.input.off("pointerdown", this.onPointerDown); this.scale.off("resize", this.render, this); this.bannerTimer && this.bannerTimer.remove(); this.presentationTimer?.remove();
+    this.input.off("pointerdown", this.onPointerDown); this.input.off("pointermove", this.onPointerMove); this.input.off("pointerup", this.onPointerUp); this.scale.off("resize", this.render, this); this.bannerTimer && this.bannerTimer.remove(); this.presentationTimer?.remove();
     this.tweens.killTweensOf(this.graphics); this.tweens.killTweensOf(this.motionMarker); this.motionMarker?.destroy();
   }
 
@@ -58,15 +61,42 @@ export class MainScene extends Phaser.Scene {
 
   get localPlayer() { return this.room?.match?.player; }
   get layout() {
-    const width = this.scale.width; const height = this.scale.height; const compact = width < 650;
-    const cell = Math.max(26, Math.min(compact ? 42 : 54, Math.floor((width - (compact ? 28 : 260)) / 10), Math.floor((height - (compact ? 360 : 190)) / 10)));
-    const boardWidth = cell * 10; return { width, height, compact, cell, boardWidth, gridX: compact ? Math.floor((width - boardWidth) / 2) : 24, gridY: compact ? 166 : 168 };
+    const width = this.scale.width; const height = this.scale.height; const mobile = height <= 540 && width > height; const compact = !mobile && width < 650;
+    let region;
+    if (mobile) { const sideWidth = Math.min(270, Math.max(210, Math.floor(width * .39))); region = { x: 8, y: 48, width: Math.max(220, width - sideWidth - 24), height: Math.max(180, height - 58) }; }
+    else { const cell = Math.max(26, Math.min(compact ? 42 : 54, Math.floor((width - (compact ? 28 : 260)) / 10), Math.floor((height - (compact ? 360 : 190)) / 10))); const boardWidth = cell * 10; region = { x: compact ? Math.floor((width - boardWidth) / 2) : 24, y: compact ? 166 : 168, width: boardWidth, height: boardWidth }; }
+    this.viewport.setRegion(region); return { width, height, compact, mobile, region, ...this.viewport.layout() };
+  }
+
+  isTouch(pointer) { return pointer.pointerType === "touch"; }
+  rememberTouch(pointer) { this.touchPoints.set(pointer.id, { x: pointer.x, y: pointer.y }); }
+  touchPair() { return [...this.touchPoints.values()].slice(0, 2); }
+  handlePointerDown(pointer) {
+    if (!this.isTouch(pointer)) return this.chooseStart(pointer);
+    this.rememberTouch(pointer);
+    this.touchGesture = { x: pointer.x, y: pointer.y, moved: false, multi: this.touchPoints.size > 1 };
+    if (this.touchPoints.size > 1) this.touchGesture.moved = true;
+  }
+  handlePointerMove(pointer) {
+    if (!this.isTouch(pointer) || !this.touchPoints.has(pointer.id)) return;
+    const previous = this.touchPoints.get(pointer.id); this.rememberTouch(pointer); const points = this.touchPair();
+    if (points.length > 1) {
+      const [a, b] = points; const distance = Math.hypot(a.x - b.x, a.y - b.y); const centerX = (a.x + b.x) / 2; const centerY = (a.y + b.y) / 2;
+      if (this.touchGesture?.distance) { this.viewport.panBy(centerX - this.touchGesture.centerX, centerY - this.touchGesture.centerY); this.viewport.zoomAt(this.viewport.zoom * distance / this.touchGesture.distance, centerX, centerY); this.render(); }
+      this.touchGesture = { distance, centerX, centerY, moved: true, multi: true }; return;
+    }
+    if (!this.touchGesture?.multi && Math.hypot(pointer.x - this.touchGesture.x, pointer.y - this.touchGesture.y) > 8) { this.touchGesture.moved = true; this.viewport.panBy(pointer.x - previous.x, pointer.y - previous.y); this.render(); }
+  }
+  handlePointerUp(pointer) {
+    if (!this.isTouch(pointer)) return; const gesture = this.touchGesture; this.touchPoints.delete(pointer.id);
+    if (!this.touchPoints.size && gesture && !gesture.moved) this.chooseStart(pointer);
+    if (!this.touchPoints.size) this.touchGesture = null;
   }
 
   chooseStart(pointer) {
     if (this.room?.phase !== "starting" || this.localPlayer?.position || !this.connected) return;
-    const { gridX, gridY, cell } = this.layout; const x = Math.floor((pointer.x - gridX) / cell); const y = Math.floor((pointer.y - gridY) / cell);
-    if (x >= 0 && x < 10 && y >= 0 && y < 10) socket.emit(EVENTS.CHOOSE_START, { position: { x, y } });
+    if (!this.viewport.contains(pointer.x, pointer.y)) return; const { x, y } = this.viewport.toCell(pointer.x, pointer.y);
+    socket.emit(EVENTS.CHOOSE_START, { position: { x, y } });
   }
 
   sendMove(direction) {
@@ -170,6 +200,14 @@ export class MainScene extends Phaser.Scene {
   }
 
   positionUi(layout) {
+    if (layout.mobile) {
+      const sideX = layout.region.x + layout.region.width + 10; const infoWidth = layout.width - sideX - 8;
+      this.title.setPosition(8, 8).setStyle({ fontSize: "17px", wordWrap: { width: layout.width - 16 } });
+      [this.status, this.score, this.effects, this.hint].forEach((text) => text.setX(sideX).setStyle({ fontSize: text === this.status ? "13px" : "12px", wordWrap: { width: infoWidth } }));
+      this.status.setY(42); this.score.setY(78); this.effects.setY(110); this.hint.setPosition(sideX, 154); this.log.setPosition(sideX, 178).setStyle({ fontSize: "11px", wordWrap: { width: infoWidth } });
+      const cx = sideX + infoWidth / 2; const cy = layout.height - 55; this.directionButtons.up.setPosition(cx, cy - 40); this.directionButtons.left.setPosition(cx - 44, cy); this.directionButtons.down.setPosition(cx, cy); this.directionButtons.right.setPosition(cx + 44, cy);
+      this.banner.setPosition(layout.region.x + layout.region.width / 2, 30).setOrigin(.5); return;
+    }
     const sideX = layout.gridX + layout.boardWidth + 24; const infoX = layout.compact ? 16 : sideX; const infoWidth = layout.compact ? layout.width - 32 : Math.max(180, layout.width - sideX - 16);
     for (const text of [this.title, this.status, this.score, this.effects, this.hint]) { text.setX(infoX); text.setStyle({ wordWrap: { width: infoWidth } }); }
     if (layout.compact) { this.log.setPosition(16, layout.gridY + layout.boardWidth + 118).setStyle({ wordWrap: { width: layout.width - 32 } }); }
@@ -233,7 +271,7 @@ export class MainScene extends Phaser.Scene {
     this.status.setColor(this.presentationBusy ? "#8cddff" : isMyTurn && remaining !== null && remaining <= 5 ? "#ff8f8f" : isMyTurn ? "#8cff98" : "#aaa");
     this.score.setText((this.room.match?.scores ?? []).map((entry) => `${entry.name}: ${entry.extractedTreasures}/4`).join("   "));
     this.effects.setText(`Inventory: ${player?.carriedTreasure ? "◆ treasure" : "no treasure"} · +${player?.movementBonus ?? 0} moves · ${player?.hasPirateGlass ? "pirate glass" : "no glass"}${player?.skipTurns ? ` · trap: ${player.skipTurns} turns` : ""}`);
-    this.hint.setText(this.connected ? (perspective === "observer" ? "Watch your opponent explore the maze you built." : "Use arrows, WASD, or the direction pad.") : "Reconnecting…");
+    this.hint.setText(this.connected ? (layout.mobile ? "Drag maze · pinch to zoom" : perspective === "observer" ? "Watch your opponent explore the maze you built." : "Use arrows, WASD, or the direction pad.") : "Reconnecting…");
     this.log.setText(this.activity.join("\n"));
     const enabled = canSendMove(this.room, socket.id, this.connected, this.pendingMove || this.presentationBusy); for (const button of Object.values(this.directionButtons)) button.setAlpha(enabled ? 1 : .35).disableInteractive();
     if (enabled) for (const button of Object.values(this.directionButtons)) button.setInteractive({ useHandCursor: true });

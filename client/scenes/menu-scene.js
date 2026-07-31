@@ -10,7 +10,8 @@ export class MenuScene extends Phaser.Scene {
 
     // Generate HTML form dynamically through a template string
     const htmlForm = `
-            <div style="color: white; font-family: Arial; text-align: center; background: #222; padding: 20px; border-radius: 8px;">
+            <div id="menu-form" style="color: white; font-family: Arial; text-align: center; background: #222; padding: 20px; border-radius: 8px;">
+              <div class="menu-fields">
                 <input type="text" id="nameInput" placeholder="Your name..." style="padding: 10px; width: 200px; font-size: 16px;"><br><br>
                 <input type="text" id="roomInput" placeholder="Room code (to join)..." style="padding: 10px; width: 200px; font-size: 16px;"><br><br>
                 <select id="timerInput" style="padding: 10px; width: 224px; font-size: 16px;">
@@ -19,9 +20,11 @@ export class MenuScene extends Phaser.Scene {
                 <select id="difficultyInput" style="padding: 10px; width: 224px; font-size: 16px;">
                   <option value="easy">Easy — 45 walls</option><option value="normal" selected>Normal — 65 walls</option><option value="hard">Hard — unlimited walls</option>
                 </select><br><br>
+              </div>
+              <div class="menu-actions">
                 <button id="createBtn" style="padding: 10px 20px; font-size: 16px; margin-right: 10px; cursor: pointer;">Create Room</button>
                 <button id="joinBtn" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Join Room</button>
-                <p id="errorLog" style="color: red; margin-top: 15px; font-weight: bold;"></p>
+              </div><p id="errorLog" style="color: red; margin-top: 10px; font-weight: bold;"></p>
             </div>
         `;
 
@@ -71,9 +74,9 @@ export class MenuScene extends Phaser.Scene {
       this.scene.start("MainScene", gameData);
     });
     this.layout = () => {
-      const compact = this.scale.width < 650;
-      this.title.setPosition(this.scale.width / 2, compact ? 70 : 100);
-      domElement.setPosition(this.scale.width / 2, compact ? Math.min(330, this.scale.height / 2) : 300).setScale(compact ? .9 : 1);
+      const mobile = this.scale.height <= 540 && this.scale.width > this.scale.height; const compact = !mobile && this.scale.width < 650;
+      this.title.setPosition(this.scale.width / 2, mobile ? 30 : compact ? 70 : 100);
+      domElement.setPosition(this.scale.width / 2, mobile ? this.scale.height / 2 + 12 : compact ? Math.min(330, this.scale.height / 2) : 300).setScale(mobile ? .78 : compact ? .9 : 1);
     };
     this.layout(); this.scale.on("resize", this.layout);
     this.events.once("shutdown", () => { this.scale.off("resize", this.layout); socket.off(EVENTS.ROOM_SNAPSHOT); socket.off(EVENTS.ERROR); socket.off(EVENTS.START_MATCH); });
