@@ -86,36 +86,9 @@ export class MazeGenerator {
       }
     }
 
-    // 3. Inject Entrances/Exits (Ported exactly from your Godot borders rules)
-
-    // Left border opening
-    const leftY = Math.floor(Math.random() * this.height);
-    let leftWalls = 0;
-    if (leftY === 0) leftWalls |= this.N;
-    if (leftY === this.height - 1) leftWalls |= this.S;
-    mapArray[leftY][0] = leftWalls;
-
-    // Top border opening
-    const topX = Math.floor(Math.random() * this.width);
-    let topWall = 0;
-    if (topX === 0) topWall |= this.W;
-    if (topX === this.width - 1) topWall |= this.E;
-    mapArray[0][topX] = topWall;
-
-    // Right border opening
-    const rightY = Math.floor(Math.random() * this.height);
-    let rightWall = 0;
-    if (rightY === 0) rightWall |= this.N;
-    if (rightY === this.height - 1) rightWall |= this.S;
-    mapArray[rightY][this.width - 1] = rightWall;
-
-    // Bottom border opening
-    const bottomX = Math.floor(Math.random() * this.width);
-    let bottomWall = 0;
-    if (bottomX === 0) bottomWall |= this.W;
-    if (bottomX === this.width - 1) bottomWall |= this.E;
-    mapArray[this.height - 1][bottomX] = bottomWall;
-
+    // Open exactly one distinct border cell on each edge. Internal walls remain symmetric.
+    const positions = { north: { x: 1, y: 0, flag: this.N }, east: { x: this.width - 1, y: 3, flag: this.E }, south: { x: this.width - 2, y: this.height - 1, flag: this.S }, west: { x: 0, y: this.height - 4, flag: this.W } };
+    for (const position of Object.values(positions)) mapArray[position.y][position.x] &= ~position.flag;
     return mapArray;
   }
 }

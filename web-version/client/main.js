@@ -1,6 +1,5 @@
 import Phaser from "phaser";
-import { io } from "socket.io-client";
-import { MenuScene, MainScene } from "./scenes";
+import { MenuScene, MainScene, SetupScene } from "./scenes";
 import { socket } from "./services/socket-service.js";
 
 const config = {
@@ -8,10 +7,11 @@ const config = {
   width: 800,
   height: 800,
   parent: "game-container",
+  scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
   dom: {
     createContainer: true,
   },
-  scene: [MainScene, MenuScene],
+  scene: [MenuScene, MainScene, SetupScene],
 };
 
 new Phaser.Game(config);

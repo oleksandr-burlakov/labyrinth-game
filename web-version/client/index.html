@@ -10,10 +10,17 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 100vh;
+        width: 100vw;
+        height: 100dvh;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
       }
       #game-container {
-        border: 2px solid #fff;
+        width: min(100vw, 1000px);
+        height: 100dvh;
+        max-height: 900px;
+        border: 2px solid #54616d;
+        box-sizing: border-box;
       }
     </style>
   </head>

@@ -1,4 +1,5 @@
 import { io } from "socket.io-client";
+import { EVENTS } from "@labyrinth/shared";
 
 // Connect to the server using Socket.IO
 export const socket = io(
@@ -6,3 +7,5 @@ export const socket = io(
     ? "URL_TO_PROD_SERVER" // TODO: replace with your production server URL
     : "http://localhost:3001",
 );
+
+export { EVENTS };
