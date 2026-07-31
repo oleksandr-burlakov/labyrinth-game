@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { BoardViewport } from "./board-viewport.js";
+import { BoardViewport, isTouchPointer } from "./board-viewport.js";
 
 describe("BoardViewport", () => {
+  it("recognizes Phaser and browser touch pointers", () => {
+    expect(isTouchPointer({ wasTouch: true })).toBe(true); expect(isTouchPointer({ event: { pointerType: "touch" } })).toBe(true); expect(isTouchPointer({ pointerType: "mouse" })).toBe(false);
+  });
+
   it("fits a board within its region and converts screen coordinates", () => {
     const viewport = new BoardViewport(); viewport.setRegion({ x: 10, y: 20, width: 300, height: 200 }, { preserveView: false });
     expect(viewport.cell).toBe(20); expect(viewport.layout().gridX).toBe(60); expect(viewport.toCell(70, 30)).toEqual({ x: 0, y: 0 });

@@ -27,8 +27,9 @@ function clearTurnTimers(roomCode) {
 function emitSnapshot(room, events = []) {
   for (const player of room.players) {
     const projected = projectRoom(room, player.id);
-    io.to(player.id).emit(EVENTS.ROOM_SNAPSHOT, envelope({ room: projected }));
-    if (room.match) io.to(player.id).emit(EVENTS.STATE, envelope({ room: projected, events }));
+    const serverNow = Date.now();
+    io.to(player.id).emit(EVENTS.ROOM_SNAPSHOT, envelope({ room: projected, serverNow }));
+    if (room.match) io.to(player.id).emit(EVENTS.STATE, envelope({ room: projected, events, serverNow }));
   }
 }
 function scheduleTurn(room) {

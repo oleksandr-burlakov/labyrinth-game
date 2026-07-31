@@ -1,7 +1,7 @@
 export const PROTOCOL_VERSION = 4;
 export const MAZE_WIDTH = 10;
 export const MAZE_HEIGHT = 10;
-export const TURN_TRANSITION_MS = 1000;
+export const TURN_TRANSITION_MS = 450;
 export const DIFFICULTIES = Object.freeze({ EASY: "easy", NORMAL: "normal", HARD: "hard" });
 export const DEFAULT_DIFFICULTY = DIFFICULTIES.NORMAL;
 export const DIFFICULTY_WALL_LIMITS = Object.freeze({

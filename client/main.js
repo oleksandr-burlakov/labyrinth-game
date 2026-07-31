@@ -7,6 +7,7 @@ const config = {
   width: 800,
   height: 800,
   parent: "game-container",
+  input: { activePointers: 3 },
   scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
   dom: {
     createContainer: true,

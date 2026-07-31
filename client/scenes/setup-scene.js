@@ -1,7 +1,7 @@
 import { socket, EVENTS } from "../services/socket-service.js";
 import { MazeGenerator } from "../services/maze-generator.js";
 import { getDifficultyWallLimit } from "@labyrinth/shared";
-import { BoardViewport } from "../services/board-viewport.js";
+import { BoardViewport, isTouchPointer } from "../services/board-viewport.js";
 import { addGameSprite, gameAsset, preloadGameAssets } from "../services/game-assets.js";
 
 const ITEMS = [
@@ -119,7 +119,7 @@ export class SetupScene extends Phaser.Scene {
   getNearestEdge(pointer, cell) { const layout = this.getLayout(); const localX = pointer.x - (layout.gridX + cell.x * layout.cell); const localY = pointer.y - (layout.gridY + cell.y * layout.cell); const choices = [{ side: "left", distance: localX }, { side: "right", distance: layout.cell - localX }, { side: "top", distance: localY }, { side: "bottom", distance: layout.cell - localY }].sort((a, b) => a.distance - b.distance); return choices[0].distance <= Math.max(8, layout.cell * .22) ? choices[0].side : null; }
   isExterior(cell, side) { return (side === "top" && cell.y === 0) || (side === "right" && cell.x === 9) || (side === "bottom" && cell.y === 9) || (side === "left" && cell.x === 0); }
 
-  isTouch(pointer) { return pointer.pointerType === "touch"; }
+  isTouch(pointer) { return isTouchPointer(pointer); }
   rememberTouch(pointer) { this.touchPoints.set(pointer.id, { x: pointer.x, y: pointer.y }); }
   touchPair() { return [...this.touchPoints.values()].slice(0, 2); }
   handlePointerDown(pointer) {

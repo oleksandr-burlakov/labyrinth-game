@@ -1,6 +1,6 @@
 import { socket, EVENTS } from "../services/socket-service.js";
 import { canSendMove, eventText, isOuterMazeEdge, perspectiveFor, secondsRemaining } from "../services/match-view.js";
-import { BoardViewport } from "../services/board-viewport.js";
+import { BoardViewport, isTouchPointer } from "../services/board-viewport.js";
 import { addGameSprite, gameAsset, preloadGameAssets } from "../services/game-assets.js";
 
 const ITEM_VISUALS = {
@@ -16,7 +16,7 @@ export class MainScene extends Phaser.Scene {
   init({ room } = {}) {
     this.room = room ?? null; this.pendingMove = false; this.connected = socket.connected; this.activity = []; this.flash = null;
     this.presentationBusy = false; this.presentationPerspective = null; this.presentationQueue = []; this.presentationTimer = null; this.motionMarker = null;
-    this.viewport = new BoardViewport(); this.touchPoints = new Map(); this.touchGesture = null;
+    this.viewport = new BoardViewport(); this.touchPoints = new Map(); this.touchGesture = null; this.serverTimeOffset = 0;
     this.boardVisuals = []; this.inventoryVisuals = []; this.inventorySignature = null; this.motionMarkerKey = null;
   }
 
@@ -35,7 +35,7 @@ export class MainScene extends Phaser.Scene {
     this.motionMarker = null;
     this.cursors = this.input.keyboard.createCursorKeys(); this.keys = this.input.keyboard.addKeys("W,A,S,D");
     this.createDirectionButtons();
-    this.onState = ({ room, events = [] }) => this.receiveState(room, events);
+    this.onState = ({ room, events = [], serverNow }) => this.receiveState(room, events, serverNow);
     this.onWarning = () => { this.showBanner("Only 5 seconds remain!", "#ff8f8f"); this.render(); };
     this.onFinished = ({ result }) => { this.showBanner(result.winnerId === socket.id ? "You won!" : "Opponent won.", "#ffd166", 5000); this.render(); };
     this.onError = ({ message }) => { this.pendingMove = false; this.showBanner(message, "#ff8f8f", 3500); this.render(); };
@@ -64,6 +64,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   get localPlayer() { return this.room?.match?.player; }
+  serverNow() { return Date.now() + this.serverTimeOffset; }
   get layout() {
     const width = this.scale.width; const height = this.scale.height; const mobile = height <= 540 && width > height; const compact = !mobile && width < 650;
     let region;
@@ -72,7 +73,7 @@ export class MainScene extends Phaser.Scene {
     this.viewport.setRegion(region); return { width, height, compact, mobile, region, ...this.viewport.layout() };
   }
 
-  isTouch(pointer) { return pointer.pointerType === "touch"; }
+  isTouch(pointer) { return isTouchPointer(pointer); }
   rememberTouch(pointer) { this.touchPoints.set(pointer.id, { x: pointer.x, y: pointer.y }); }
   touchPair() { return [...this.touchPoints.values()].slice(0, 2); }
   handlePointerDown(pointer) {
@@ -104,7 +105,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   sendMove(direction) {
-    if (!canSendMove(this.room, socket.id, this.connected, this.pendingMove || this.presentationBusy)) return;
+    if (!canSendMove(this.room, socket.id, this.connected, this.pendingMove || this.presentationBusy, this.serverNow())) return;
     this.pendingMove = true; socket.emit(EVENTS.MOVE, { direction }); this.render();
   }
 
@@ -112,7 +113,7 @@ export class MainScene extends Phaser.Scene {
     for (const [key, direction] of Object.entries(KEY_DIRECTIONS)) {
       const input = this.cursors[key] ?? this.keys[key]; if (input && Phaser.Input.Keyboard.JustDown(input)) this.sendMove(direction);
     }
-    if (this.room?.turn?.deadlineAt) this.renderStatusOnly();
+    if (this.room?.turn?.deadlineAt || this.room?.turn?.availableAt) this.renderStatusOnly();
   }
 
   recordEvents(events) {
@@ -145,7 +146,8 @@ export class MainScene extends Phaser.Scene {
     return null;
   }
 
-  receiveState(room, events) {
+  receiveState(room, events, serverNow) {
+    if (Number.isFinite(serverNow)) this.serverTimeOffset = serverNow - Date.now();
     this.pendingMove = false;
     if (!this.room || !this.shouldPresent(events)) {
       if (this.presentationBusy) this.presentationQueue.push({ room, events });
@@ -172,7 +174,7 @@ export class MainScene extends Phaser.Scene {
 
   finishMovePresentation(next) {
     this.motionMarker?.setVisible(false); this.room = next.room; this.render();
-    const availableAt = next.room.turn?.availableAt; const hold = availableAt ? Math.max(0, availableAt - Date.now()) : 600;
+    const availableAt = next.room.turn?.availableAt; const hold = availableAt ? Math.max(0, availableAt - this.serverNow()) : 600;
     this.presentationTimer = this.time.delayedCall(hold, () => this.completeMovePresentation());
   }
 
@@ -314,17 +316,18 @@ export class MainScene extends Phaser.Scene {
   }
 
   renderStatus() {
-    const layout = this.layout; const player = this.localPlayer; const perspective = this.presentationPerspective ?? perspectiveFor(this.room, socket.id); const isMyTurn = this.room.turn?.activePlayerId === socket.id; const remaining = secondsRemaining(this.room.turn?.deadlineAt);
+    const layout = this.layout; const player = this.localPlayer; const perspective = this.presentationPerspective ?? perspectiveFor(this.room, socket.id); const isMyTurn = this.room.turn?.activePlayerId === socket.id; const now = this.serverNow(); const remaining = secondsRemaining(this.room.turn?.deadlineAt, now); const readyIn = Math.max(0, (this.room.turn?.availableAt ?? 0) - now);
     this.title.setText(`Room ${this.room.code} — ${perspective === "observer" ? "your maze" : "opponent maze"}`);
     if (this.room.phase === "starting") this.status.setText(player?.position ? "Start selected. Waiting for your opponent…" : "Choose any cell as your starting position.");
     else if (this.room.phase === "finished") this.status.setText("Match complete.");
     else if (this.presentationBusy) this.status.setText("Resolving move…");
+    else if (isMyTurn && readyIn > 0) this.status.setText(`Your turn starts in ${(readyIn / 1000).toFixed(1)}s…`);
     else this.status.setText(isMyTurn ? `Your turn: ${this.room.turn.movesRemaining} attempt(s)${remaining !== null ? ` · ${remaining}s` : " · no timer"}` : `Opponent's turn${remaining !== null ? ` · ${remaining}s` : ""}`);
-    this.status.setColor(this.presentationBusy ? "#8cddff" : isMyTurn && remaining !== null && remaining <= 5 ? "#ff8f8f" : isMyTurn ? "#8cff98" : "#aaa");
+    this.status.setColor(this.presentationBusy || readyIn > 0 ? "#8cddff" : isMyTurn && remaining !== null && remaining <= 5 ? "#ff8f8f" : isMyTurn ? "#8cff98" : "#aaa");
     this.score.setText((this.room.match?.scores ?? []).map((entry) => `${entry.name}: ${entry.extractedTreasures}/4`).join("   "));
     this.hint.setText(this.connected ? (layout.mobile ? "Drag maze · pinch to zoom" : perspective === "observer" ? "Watch your opponent explore the maze you built." : "Use arrows, WASD, or the direction pad.") : "Reconnecting…");
     this.log.setText(this.activity.join("\n"));
-    const enabled = canSendMove(this.room, socket.id, this.connected, this.pendingMove || this.presentationBusy); for (const button of Object.values(this.directionButtons)) button.setAlpha(enabled ? 1 : .35).disableInteractive();
+    const enabled = canSendMove(this.room, socket.id, this.connected, this.pendingMove || this.presentationBusy, now); for (const button of Object.values(this.directionButtons)) button.setAlpha(enabled ? 1 : .35).disableInteractive();
     if (enabled) for (const button of Object.values(this.directionButtons)) button.setInteractive({ useHandCursor: true });
     if (layout.compact && layout.height < 650) this.hint.setVisible(false); else this.hint.setVisible(true);
   }

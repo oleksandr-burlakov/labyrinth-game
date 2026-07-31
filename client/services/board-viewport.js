@@ -1,5 +1,7 @@
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+export function isTouchPointer(pointer) { return Boolean(pointer?.wasTouch || pointer?.pointerType === "touch" || pointer?.event?.pointerType === "touch"); }
+
 /** Keeps a square board inside a fixed screen region while it is panned and zoomed. */
 export class BoardViewport {
   constructor({ columns = 10, rows = 10, maxZoom = 2.5 } = {}) {
