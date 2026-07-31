@@ -2,6 +2,7 @@ import { socket, EVENTS } from "../services/socket-service.js";
 import { MazeGenerator } from "../services/maze-generator.js";
 import { getDifficultyWallLimit } from "@labyrinth/shared";
 import { BoardViewport } from "../services/board-viewport.js";
+import { addGameSprite, gameAsset, preloadGameAssets } from "../services/game-assets.js";
 
 const ITEMS = [
   { type: "treasure", label: "Treasure ×4", symbol: "◆", color: "#fc5", quota: 4 },
@@ -18,6 +19,7 @@ const ENTRANCE_SIDE = { top: "north", right: "east", bottom: "south", left: "wes
 export class SetupScene extends Phaser.Scene {
   constructor() { super("SetupScene"); }
   init({ room }) { this.room = room; this.maze = null; this.activeItem = null; this.drag = null; this.submitted = false; this.viewport = new BoardViewport(); this.touchPoints = new Map(); this.touchGesture = null; }
+  preload() { preloadGameAssets(this); }
 
   create() {
     this.title = this.add.text(16, 16, `Room ${this.room.code} — Build the maze your opponent will play`, { fontSize: "18px", fill: "#fff" });
@@ -86,7 +88,11 @@ export class SetupScene extends Phaser.Scene {
       if (value & WALL.left) this.draftGraphics.lineBetween(left, top, left, top + cell);
     }
     this.draftGraphics.lineStyle(4, 0x55ddff, 1); for (const entrance of this.maze.entrances) this.drawEntrance(entrance, layout);
-    for (const item of this.maze.items) { const definition = ITEMS.find((candidate) => candidate.type === item.type); this.itemVisuals.push(this.add.text(gridX + item.x * cell + cell * .34, gridY + item.y * cell + cell * .22, definition.symbol, { fontSize: `${Math.max(14, cell * .42)}px`, fill: definition.color })); }
+    for (const item of this.maze.items) {
+      const definition = ITEMS.find((candidate) => candidate.type === item.type); const asset = gameAsset(item.type, "board"); const x = gridX + item.x * cell + cell / 2; const y = gridY + item.y * cell + cell / 2;
+      if (asset && this.textures.exists(asset.key)) this.itemVisuals.push(addGameSprite(this, item.type, "board", x, y).setDisplaySize(Math.max(14, cell * .58), Math.max(14, cell * .58)));
+      else this.itemVisuals.push(this.add.text(gridX + item.x * cell + cell * .34, gridY + item.y * cell + cell * .22, definition.symbol, { fontSize: `${Math.max(14, cell * .42)}px`, fill: definition.color }));
+    }
     this.drawPalette(layout);
   }
 
@@ -101,7 +107,9 @@ export class SetupScene extends Phaser.Scene {
     const { paletteX: x, paletteY: y } = layout; this.paletteVisuals.push(this.add.text(x, y, `Required items\n${this.wallStatus()}`, { fontSize: "16px", fill: "#fff" }));
     ITEMS.forEach((definition, index) => {
       const placed = this.maze.items.filter((item) => item.type === definition.type).length; const active = this.activeItem?.type === definition.type; const twoColumns = layout.compact || layout.mobile; const column = twoColumns ? index % 2 : 0; const row = twoColumns ? Math.floor(index / 2) : index; const columnWidth = layout.mobile ? Math.floor((layout.width - x - 12) / 2) : Math.floor((layout.width - 28) / 2);
-      const text = this.add.text(x + column * columnWidth, y + 48 + row * (twoColumns ? (layout.mobile ? 42 : 52) : 58), `${definition.symbol} ${definition.label}\n${placed}/${definition.quota}`, { fontSize: layout.mobile ? "11px" : "14px", fill: active ? "#fff" : definition.color, backgroundColor: active ? "#555" : "#222", padding: { x: 5, y: 4 } }).setInteractive({ useHandCursor: true });
+      const tileX = x + column * columnWidth; const tileY = y + 48 + row * (twoColumns ? (layout.mobile ? 42 : 52) : 58); const asset = gameAsset(definition.type, "inventory"); const labelX = asset && this.textures.exists(asset.key) ? tileX + (layout.mobile ? 28 : 38) : tileX;
+      if (asset && this.textures.exists(asset.key)) { const image = addGameSprite(this, definition.type, "inventory", tileX + (layout.mobile ? 16 : 20), tileY + (layout.mobile ? 15 : 20)).setDisplaySize(layout.mobile ? 22 : 30, layout.mobile ? 22 : 30).setInteractive({ useHandCursor: true }); image.on("pointerdown", () => this.selectPaletteItem(definition)); this.paletteVisuals.push(image); }
+      const text = this.add.text(labelX, tileY, `${asset && this.textures.exists(asset.key) ? "" : `${definition.symbol} `}${definition.label}\n${placed}/${definition.quota}`, { fontSize: layout.mobile ? "11px" : "14px", fill: active ? "#fff" : definition.color, backgroundColor: active ? "#555" : "#222", padding: { x: 5, y: 4 } }).setInteractive({ useHandCursor: true });
       text.on("pointerdown", () => this.selectPaletteItem(definition)); this.paletteVisuals.push(text);
     });
   }

@@ -4,7 +4,10 @@
   - Ui should be aligned to landscape orientation to keep everything game related on screen without empty spaces
   - Also it's not possible to scroll maze when screen are smaller (so I am freezen in page zoom position)
 
+- Issue when playing in multiplayer - after end turn when user see his turn then clicking move it says: wait to finish previous turn. It nerves people.
+
 - Add instruction and guidlines
+- Add multilanguage support (add ukrainian along with english)
 
 - General styling and ui updates:
   - Think of improvement GUI:
